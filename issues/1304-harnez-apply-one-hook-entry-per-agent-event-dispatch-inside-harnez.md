@@ -211,3 +211,65 @@ M3 proper (Codex, `internal/codex/hooks.go:59-96`):
 7. Codex migration: `Apply` and `Remove` (`hooks.go:175,328`) replace old harnez entries and keep foreign ones. Test it like the Claude migration test. Old subcommands keep working.
 8. Docs: `docs/CodexHooks.md`.
 9. Gates: `HTO=0 make test-q1` once, with the log in a file. Commits `fix(hook): … (issue 1304 M3)` / `feat(hook): …`, at most 3. Never amend.
+
+## M3 review (host and agy:neon:med reviewer)
+
+M3 delivered (spec manifest and Codex per-event entries): bdcf6904.
+- `spec/hooks.yaml` now holds the Claude and Codex manifests, bound to Go by name.
+- A `hooks:` key in a `-c` config is rejected.
+- Codex gets 7 `harnez hook codex <Event>` entries.
+
+Developer checks: q1 gave 83 ok and 0 `--- FAIL`, and Claude settings are byte-identical to M2. The host compared the Codex events and matchers with the old `BuildHooksDoc` (bc44a833:internal/codex/hooks.go): all 7 match.
+
+Reviewer rev-1304-m3 findings:
+1. **MED** parity:
+   - The Codex PreToolUse handler has `tools: [Bash]`. A payload with no `tool_name`, or with malformed JSON, now silently skips `codex-hook`.
+   - The old `harnez codex-hook` ignored `tool_name` and returned an error on bad JSON (`cmd/harnez/codexhooks.go:135-143`).
+   - `docs/CodexHooks.md:80` says Codex uses no tool routing, which contradicts the spec.
+2. **MED** foreign-hook deletion: `RunsHarnez` (`internal/hookdispatch/runsharnez.go:14-26`) splits with `strings.Fields` before handling quotes.
+   - `env MSG="hi harnez" /opt/user` and `FOO="a harnez" /opt/user` count as harnez and get dropped.
+   - `"/my dir/harnez" hook Stop` does not count as harnez and is left behind.
+3. **LOW** `internal/codex/hooks.go:384-396` `isHarnezGroup` requires every handler in a group to run harnez. A mixed group is kept by `Remove` and duplicated by `Apply`. Claude filters per handler.
+4. **MED** test: `TestRemoveDropsLegacyAndCurrentHarnezCommands` (`internal/codex/hooks_migration_test.go:137-155`) runs `Apply` first, so `Remove` is never tested on legacy entries.
+5. **LOW** checks:
+   - The rule that `matcher` and `tools` exclude each other is checked only in `Entries()`, not in the schema or in `ParseManifest`.
+   - `TestAgentsHaveDistinctCommands` never compares the agents' commands (vacuous).
+   - `TestLegacyCodexSubcommandsStillRegistered` checks the constructor, not registration on the root command.
+
+## Decision (decide mode, M3 review)
+
+- **Codex PreToolUse:** set the event-level `matcher: Bash` and give `codex-hook` no `tools` filter, so it runs on every payload Codex sends, as the old entry did.
+  - Bad JSON must give the same exit code and stderr as `harnez codex-hook`; prove it with a golden.
+  - Reason: Codex already filters with the host matcher, and parity with the old entry beats a second filter.
+- **Command detection:** `RunsHarnez` tokenizes with POSIX-shell quote rules (single quotes, double quotes, backslash) before it looks at leading `VAR=value` words and `env`. It is harnez only when the first command word's base name is exactly `harnez`.
+  - Reason: dropping a foreign hook is the worst failure, so a near miss must stay foreign.
+
+## M4 pre-work (M3 follow-ups)
+
+1. Codex PreToolUse per the decision. Goldens against `harnez codex-hook` for three payloads:
+   - Bash;
+   - no `tool_name`;
+   - malformed JSON (exit code and stderr).
+
+   Fix `docs/CodexHooks.md:80`.
+2. Rewrite `RunsHarnez` per the decision. Table tests must keep these foreign:
+   - `env MSG="hi harnez" /opt/user`;
+   - `FOO="a harnez" /opt/user`;
+   - `env harnez-foo`;
+   - `sh -c "harnez hook Stop"`;
+   - `/opt/harnez-wrap`.
+
+   And they must treat these as harnez:
+   - `"/my dir/harnez" hook Stop`;
+   - `'/opt/bin/harnez' hook codex Stop`;
+   - `env A=1 B="x y" harnez hook Stop`;
+   - `harnez codex-telemetry`.
+
+   Claude and Codex migration must both use it.
+3. Codex `Apply`/`Remove`: filter per handler, as Claude does. In a mixed group, remove the harnez handlers and keep the foreign ones; drop a group only once it is empty. Test it.
+4. Make `Remove` tests run on a legacy fixture without calling `Apply` first. Cover the legacy `codex-hook`/`codex-telemetry` entries, the env-prefixed entries and the mixed group. The foreign entries must survive.
+5. Small checks:
+   - `ParseManifest` rejects a handler `tools` list combined with an event `matcher`, and the schema expresses the same rule.
+   - `TestAgentsHaveDistinctCommands` compares the agents' commands.
+   - The legacy-subcommand test resolves `codex-hook` and `codex-telemetry` through the root command (`Find`).
+6. Gates: run `HTO=0 make test-q1` once, logging to a file. One or two commits `fix(hook): … (issue 1304 M4)`. Never amend. Never run apply against the real HOME.
