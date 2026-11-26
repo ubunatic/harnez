@@ -176,3 +176,30 @@ Lesson: skipping the M1 canary cost two rounds. The documented payload and the f
 2. Commit the diagnostic first as `feat(compact): … (issue 1303 M1c)`, then stop and report. The host runs a live compact and reads the reason. No fix this turn unless a test with a real-shaped payload already proves the cause.
 3. The tests must not reach the live collector: clear `HARNEZ_BROKER_FD` and any socket env in every new test. Assert it.
 4. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m1c.log`. Never amend.
+
+## M1c review (host): diagnostic result
+
+M1c delivered (diagnostic note per PostCompact): c3bdc52b. q1: 83 ok, 0 FAIL.
+
+Live run: `harnez agent compact --name dev-1303b`, session `eeaf12bb-…`, 14:44:43Z PreCompact (83 ms), 14:45:18Z PostCompact (68 ms). Rows 812/813 are still empty. The note says:
+
+```
+"reason":"stale_boundary","hook":{"side":"hook","transcript_set":true,"keys":["compact_summary","cwd","hook_event_name","prompt_id","session_id","transcript_path","trigger"]}
+```
+
+The hook side found a fresh boundary:
+- The transcript's newest boundary is at 14:45:18.352Z (pre 157210, post 11106, not a sidechain).
+- PostCompact took 68 ms, so the 3 s poll did not run. `waitClaudeCompact` returns early only with a fresh boundary.
+- So `stale_boundary` is the collector's verdict: `applyClaudeCompact` saw `compact.Timestamp.Before(preAt)`, with preAt being the PreCompact row's created_at (14:44:43Z).
+- One likely cause is that the boundary timestamp reaches the collector as the zero time after the hook → collector encoding (`harnez_context`, `codexEvidence.Compact`, broker/socket transport). An off-by-one created_at, or the wrong PreCompact row, is also possible. Unverified.
+
+The real payload keys are confirmed: `compact_summary, cwd, hook_event_name, prompt_id, session_id, transcript_path, trigger`.
+
+## M1d pre-work (fix the collector comparison)
+
+1. A test that round-trips a real-shaped payload through the same encoding the hook uses to reach the collector: `PrepareCodexTelemetry` → the bytes sent over the broker/socket → `ProcessCodexTelemetryTx`.
+   - Use the keys above and a boundary 35 s after the PreCompact row.
+   - It must fail on c3bdc52b with `stale_boundary`.
+2. Add `boundary_at` and `precompact_at` to the diagnostic note: timestamps only, no content.
+3. Fix it. The live note must then say `applied`, and the PostCompact row must carry `input_tokens`/`total_tokens` = postTokens and the model.
+4. Gates: one `HTO=0 make test-q1`, logging to `q1-1303-m1d.log`. Commit as `fix(compact): … (issue 1303 M1d)`. Never amend. `make install`, then stop; the host runs the live check.
