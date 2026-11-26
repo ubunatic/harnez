@@ -274,6 +274,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-26-two-agent-lean-sprint-1298-quota-off-spool-integration.md](studies/2026-11-26-two-agent-lean-sprint-1298-quota-off-spool-integration.md) | Two-Agent Lean Sprint: #1298 — Integrate fix/init-quota-off onto main |
 | [studies/2026-11-26-two-agent-lean-sprint-1299-selfinstall-mtime.md](studies/2026-11-26-two-agent-lean-sprint-1299-selfinstall-mtime.md) | Two-Agent Lean Sprint: #1299 — selfinstall mtime-dependent test |
 | [studies/2026-11-26-two-agent-lean-sprint-1301-claude-cost-inputs.md](studies/2026-11-26-two-agent-lean-sprint-1301-claude-cost-inputs.md) | Two-Agent Lean Sprint: #1301 — Claude cost inputs for usage analytics |
+| [studies/2026-11-26-two-agent-lean-sprint-1302-claude-cost-report.md](studies/2026-11-26-two-agent-lean-sprint-1302-claude-cost-report.md) | Two-Agent Lean Sprint: #1302 — Claude cost report |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
