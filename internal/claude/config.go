@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -23,8 +24,8 @@ type Config struct {
 	Effort         string              `yaml:"effort"`
 	Verbs          []string            `yaml:"verbs"`
 	Permissions    Permissions         `yaml:"permissions"`
-	// Hooks are derived from hookdispatch.ClaudeManifest after load; config.yaml
-	// has no hooks key (issue 1304 M2).
+	// Hooks are derived from spec/hooks.yaml (agents.claude) after load; a
+	// hooks key in config.yaml is an error (issue 1304 M2, M3).
 	Hooks                 []Hook               `yaml:"-"`
 	Env                   map[string]string    `yaml:"env"`
 	StatusLine            bool                 `yaml:"status_line"`
@@ -301,6 +302,9 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectHooksKey(data, path); err != nil {
+		return nil, err
+	}
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
@@ -318,6 +322,9 @@ func LoadConfigEmbedded() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectHooksKey(data, "embedded config.yaml"); err != nil {
+		return nil, err
+	}
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
@@ -330,10 +337,28 @@ func LoadConfigEmbedded() (*Config, error) {
 	return &cfg, nil
 }
 
-// addHarnezHooks sets cfg.Hooks to one entry per Claude event, derived from
-// the dispatcher manifest so apply and the registry cannot drift (issue 1304 M2).
+// rejectHooksKey fails when a config.yaml has a hooks key. The hook entries come
+// from spec/hooks.yaml, and a second, silently ignored source would mislead the
+// owner (issue 1304 M3).
+func rejectHooksKey(data []byte, source string) error {
+	var top map[string]yaml.Node
+	if err := yaml.Unmarshal(data, &top); err != nil {
+		return err
+	}
+	if _, ok := top["hooks"]; ok {
+		return fmt.Errorf("%s: hook entries come from spec/hooks.yaml; remove the hooks key", source)
+	}
+	return nil
+}
+
+// addHarnezHooks sets cfg.Hooks to one entry per Claude event, derived from the
+// claude agent in spec/hooks.yaml so apply and the registry cannot drift (issue 1304 M2).
 func addHarnezHooks(cfg *Config) error {
-	entries, err := hookdispatch.ClaudeManifest.Entries()
+	manifest, err := hookdispatch.LoadManifest("claude")
+	if err != nil {
+		return err
+	}
+	entries, err := manifest.Entries()
 	if err != nil {
 		return err
 	}

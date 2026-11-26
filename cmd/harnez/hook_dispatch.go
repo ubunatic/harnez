@@ -11,7 +11,7 @@ import (
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
-// hookDeps are the side effects the Claude handlers reach. Zero values give the
+// hookDeps are the side effects the hook handlers reach. Zero values give the
 // production behaviour; tests inject stand-ins so no handler touches the
 // telemetry server, the sound device or a hosted backend.
 type hookDeps struct {
@@ -27,19 +27,25 @@ type hookDeps struct {
 	StateDir string
 }
 
-// claudeHookRegistry binds the run functions to hookdispatch.ClaudeManifest.
-// Each function wraps the same code its old subcommand runs, so the output
-// contract is unchanged. The manifest holds the events and tool routing.
+// withDefaults fills the nil and empty fields with the production behaviour.
+func (d hookDeps) withDefaults() hookDeps {
+	if d.Telemetry == nil {
+		d.Telemetry = func(kind string, payload any) { sendTelemetryRecord(kind, payload) }
+	}
+	if d.PlaySound == nil {
+		d.PlaySound = func(ctx context.Context) error { return runHookSound(ctx, hookSoundOptions{}) }
+	}
+	if d.StateDir == "" {
+		d.StateDir = defaultReadHookStateDir()
+	}
+	return d
+}
+
+// claudeHookRegistry binds the run functions to the claude agent in
+// spec/hooks.yaml. Each function wraps the same code its old subcommand runs,
+// so the output contract is unchanged. The manifest holds the events and routing.
 func claudeHookRegistry(deps hookDeps) (hookdispatch.Registry, error) {
-	if deps.Telemetry == nil {
-		deps.Telemetry = func(kind string, payload any) { sendTelemetryRecord(kind, payload) }
-	}
-	if deps.PlaySound == nil {
-		deps.PlaySound = func(ctx context.Context) error { return runHookSound(ctx, hookSoundOptions{}) }
-	}
-	if deps.StateDir == "" {
-		deps.StateDir = defaultReadHookStateDir()
-	}
+	deps = deps.withDefaults()
 	skill := func(_ context.Context, in io.Reader, _ io.Writer) error {
 		runClaudeSkillHook(in, skillHookOptions{Insert: deps.SkillInsert})
 		return nil
@@ -47,7 +53,11 @@ func claudeHookRegistry(deps hookDeps) (hookdispatch.Registry, error) {
 	codexTelemetry := func(_ context.Context, in io.Reader, _ io.Writer) error {
 		return runCodexTelemetryWith(in, deps.Telemetry)
 	}
-	return hookdispatch.ClaudeManifest.Bind(map[string]hookdispatch.Func{
+	m, err := hookdispatch.LoadManifest("claude")
+	if err != nil {
+		return nil, err
+	}
+	return m.Bind(map[string]hookdispatch.Func{
 		"PreToolUse/exec": func(_ context.Context, in io.Reader, out io.Writer) error {
 			return runExecHook(in, out)
 		},
@@ -74,19 +84,68 @@ func claudeHookRegistry(deps hookDeps) (hookdispatch.Registry, error) {
 	})
 }
 
-// addHookEventCmds adds one hidden `harnez hook <Event>` command per manifest event.
-func addHookEventCmds(parent *cobra.Command) {
-	for _, event := range hookdispatch.ClaudeManifest.Events() {
-		parent.AddCommand(newHookEventCmd(event))
+// codexHookRegistry binds the run functions to the codex agent in
+// spec/hooks.yaml. codex-hook is the PreToolUse Bash handshake; codex-telemetry
+// records every other event. Both wrap the code the old codex-hook and
+// codex-telemetry subcommands run (issue 1304 M3).
+func codexHookRegistry(deps hookDeps) (hookdispatch.Registry, error) {
+	deps = deps.withDefaults()
+	telemetry := func(_ context.Context, in io.Reader, _ io.Writer) error {
+		return runCodexTelemetryWith(in, deps.Telemetry)
 	}
+	m, err := hookdispatch.LoadManifest("codex")
+	if err != nil {
+		return nil, err
+	}
+	return m.Bind(map[string]hookdispatch.Func{
+		"PreToolUse/codex-hook": func(_ context.Context, in io.Reader, out io.Writer) error {
+			return runCodexHooksHook(in, out)
+		},
+		"PostToolUse/codex-telemetry":  telemetry,
+		"PreCompact/codex-telemetry":   telemetry,
+		"PostCompact/codex-telemetry":  telemetry,
+		"SessionStart/codex-telemetry": telemetry,
+		"Stop/codex-telemetry":         telemetry,
+		"SessionEnd/codex-telemetry":   telemetry,
+	})
 }
 
-// newHookEventCmd is `harnez hook <event>`: one hidden command per Claude hook
-// event. It reads the payload once and runs every registered handler.
-func newHookEventCmd(event string) *cobra.Command {
+// addHookEventCmds adds one hidden command per event of each agent's manifest:
+// `harnez hook <Event>` for Claude and `harnez hook codex <Event>` for Codex.
+// The embedded spec is validated by tests, so a load failure here is a build
+// defect and panics.
+func addHookEventCmds(parent *cobra.Command) {
+	claude := mustManifest("claude")
+	for _, event := range claude.EventNames() {
+		parent.AddCommand(newHookEventCmd(event, "Claude", claudeHookRegistry))
+	}
+	codexParent := &cobra.Command{
+		Use:    "codex",
+		Short:  "Codex hook events: harnez hook codex <Event>",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+	}
+	codex := mustManifest("codex")
+	for _, event := range codex.EventNames() {
+		codexParent.AddCommand(newHookEventCmd(event, "Codex", codexHookRegistry))
+	}
+	parent.AddCommand(codexParent)
+}
+
+func mustManifest(agent string) hookdispatch.Manifest {
+	m, err := hookdispatch.LoadManifest(agent)
+	if err != nil {
+		panic(fmt.Sprintf("hook manifest %s: %v", agent, err))
+	}
+	return m
+}
+
+// newHookEventCmd is `harnez hook <event>` for one agent: one hidden command
+// per hook event. It reads the payload once and runs every registered handler.
+func newHookEventCmd(event, agentLabel string, registry func(hookDeps) (hookdispatch.Registry, error)) *cobra.Command {
 	return &cobra.Command{
 		Use:          event,
-		Short:        "Run every harnez handler for the Claude " + event + " hook event",
+		Short:        "Run every harnez handler for the " + agentLabel + " " + event + " hook event",
 		Hidden:       true,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -99,7 +158,7 @@ func newHookEventCmd(event string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			reg, err := claudeHookRegistry(hookDeps{})
+			reg, err := registry(hookDeps{})
 			if err != nil {
 				return err
 			}

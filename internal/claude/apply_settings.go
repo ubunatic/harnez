@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"ubunatic.com/harnez/internal/hookdispatch"
 	"ubunatic.com/harnez/internal/jsonc"
 )
 
@@ -109,11 +110,11 @@ func isManagedSettingsKey(key string) bool {
 	return slices.Contains(managedSettingsKeys, key)
 }
 
-// isHarnezCommand reports whether a hook command runs harnez: the first word's
-// base name is "harnez", bare or by absolute path (for example a go/bin install).
+// isHarnezCommand reports whether a hook command runs harnez. The rule is shared
+// with the Codex side (hookdispatch.RunsHarnez): bare, absolute, quoted and
+// env-prefixed forms count; harnez-* names and wrapper scripts do not.
 func isHarnezCommand(command string) bool {
-	fields := strings.Fields(command)
-	return len(fields) > 0 && filepath.Base(fields[0]) == "harnez"
+	return hookdispatch.RunsHarnez(command)
 }
 
 func removeHarnezHooks(value any) (map[string]any, bool) {

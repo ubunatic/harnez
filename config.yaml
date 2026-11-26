@@ -322,8 +322,9 @@ permissions:
     - "Read(//usr/**)"
   deny: []
 
-# Claude hook entries are not listed here. internal/hookdispatch.ClaudeManifest
-# derives one `harnez hook <Event>` entry per event (issue 1304).
+# Hook entries are not listed here. spec/hooks.yaml (agents.claude, agents.codex)
+# derives one `harnez hook <Event>` (Claude) or `harnez hook codex <Event>` (Codex)
+# entry per event (issue 1304).
 
 # thinking verbs (get rid of annoying word creations)
 verbs:

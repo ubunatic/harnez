@@ -1,11 +1,6 @@
 model: sonnet
 permissions:
   allow: [user:permission]
-hooks:
-  - event: PreToolUse
-    command: harnez exec hook
-  - event: Stop
-    command: user-stop
 env:
   M3_FIXTURE: stable
 verbs: [go, stop]

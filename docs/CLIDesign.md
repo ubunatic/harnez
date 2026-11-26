@@ -246,7 +246,7 @@ harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--
         ├── write ~/.claude/commands/<name>.md for each command
         ├── write each skill's SKILL.md and declared resources to ~/.gemini/skills/<name>/
         ├── write each skill's SKILL.md and declared resources to ~/.codex/skills/<name>/ when configured
-        ├── merge [hooks.harnez] into Codex config.toml when configured
+        ├── merge one `harnez hook codex <Event>` group per event into Codex config.toml when configured
         ├── write each skill's SKILL.md and declared resources to ~/.claude/skills/<name>/ (real Agent Skills, auto-loaded)
         ├── write ~/.prime/agent/prompts/<name>.md and skills/<name>/SKILL.md
         │   └── skill dirs: apply owns dirs with a .harnez-managed marker and rewrites them on every run;
@@ -441,7 +441,7 @@ Scans the repository (or target file/directory) against the machine-readable glo
 `PostToolUseFailure`, `UserPromptSubmit`, `SessionStart`, `PreCompact`, `PostCompact`, `Stop`.
 It reads the payload from stdin once and runs every registered handler for that event, in
 registry order, under one time budget per handler (`spec/hooks.yaml`, `handler_timeout`).
-The event and tool routing live in `internal/hookdispatch/claude_manifest.go` (`ClaudeManifest`);
+The event and tool routing live in `spec/hooks.yaml` (`agents.claude`, `agents.codex`, loaded by `hookdispatch.LoadManifest`);
 `cmd/harnez/hook_dispatch.go` binds one run function to each `Event/Name` handler. The generic
 dispatch and merge live in `internal/hookdispatch`. Handler failures never fail the hook: a
 failed, panicking or slow handler loses only its own output and leaves a note on stderr. A

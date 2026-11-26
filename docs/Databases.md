@@ -8,7 +8,7 @@ Inventory from 2026-09-25 (codex luna:med scan, host-verified against the code a
 
 | Path | Written by | Holds | Read by |
 |---|---|---|---|
-| `~/.local/share/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`, migrated on first use) | `harnez server` only (829/830; `rate`, `hook`, `codex-telemetry` send to it or spool) | Tool-call telemetry, usage store (quota windows, observations, history) | `usage` (read-only, 829), `stats`, `usage export` |
+| `~/.local/share/harnez/telemetry.sqlite` (legacy `~/.harnez/tool_catalog.sqlite`, migrated on first use) | `harnez server` only (829/830; `rate`, `hook`, `hook codex <Event>` send to it or spool) | Tool-call telemetry, usage store (quota windows, observations, history) | `usage` (read-only, 829), `stats`, `usage export` |
 | `~/.harnez/bench/bench.sqlite` | `internal/bench/store.go` | Bench runs: table `runs` with response, score detail, tokens, cached, order | `bench run`, `bench results` |
 
 Single-writer rule (2026-10-20, issues 828-830): only `harnez server` writes `telemetry.sqlite`.

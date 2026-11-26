@@ -1,7 +1,11 @@
-// codexhooks implements `harnez codex-hook`, the Codex-side counterpart
+// codexhooks implements the Codex handler bodies. Since issue 1304 M3 apply
+// writes one `harnez hook codex <Event>` entry per event (dispatched through
+// the registry in hook_dispatch.go); the hidden `codex-hook` and
+// `codex-telemetry` subcommands below remain for configs written before that.
+// It is the Codex-side counterpart
 // to `harnez exec hook`/`harnez agy-hooks hook`: Codex CLI ships a
 // stable, always-on native hooks system (unlike agy's), so `harnez apply`
-// writes Codex's own ~/.codex/config.toml [hooks.harnez] table (see
+// writes Codex's own ~/.codex/config.toml hook groups (see
 // internal/codex) so Codex's PreToolUse contract routes Bash tool calls
 // through `harnez exec`, the same way internal/claude's PreToolUse/Bash
 // wiring does for Claude Code. This file only implements the handshake

@@ -1,15 +1,75 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "HookDispatchSpec",
-  "description": "Budgets for the `harnez hook <event>` dispatcher (issue 1304)",
+  "description": "Budgets and per-agent hook tables for the `harnez hook` dispatcher (issue 1304)",
   "type": "object",
-  "required": ["handler_timeout"],
+  "required": ["handler_timeout", "agents"],
+  "additionalProperties": false,
   "properties": {
     "handler_timeout": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ms|s|m)$",
       "description": "Time budget for one handler run, as a Go duration with an ms, s or m suffix"
+    },
+    "agents": {
+      "type": "object",
+      "required": ["claude", "codex"],
+      "additionalProperties": {"$ref": "#/definitions/agent"}
     }
   },
-  "additionalProperties": false
+  "definitions": {
+    "agent": {
+      "type": "object",
+      "required": ["command", "events"],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "pattern": "^harnez hook( [a-z]+)?$",
+          "description": "Host command prefix; each event entry runs this followed by the event name"
+        },
+        "events": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"$ref": "#/definitions/event"}
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["handlers"],
+      "additionalProperties": false,
+      "properties": {
+        "matcher": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Explicit host matcher; cannot be combined with handler tools"
+        },
+        "handlers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/handler"}
+        }
+      }
+    },
+    "handler": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "kind": {
+          "enum": ["json", "silent", "text"]
+        },
+        "tools": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "pattern": "^[A-Za-z]+$"}
+        }
+      }
+    }
+  }
 }

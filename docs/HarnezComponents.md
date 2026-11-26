@@ -25,7 +25,7 @@ All cross-subsystem coupling is concentrated in three places:
 | **Docs/skills core** (apply) | `claude`, `codex`, `agy`, `markdown`, `jsonc`, `fsutil`, `mode` | `apply`, `diff`, `status`, `revert`, `clean`, `docs`, `docs cards`, `mode`, `scan-docs` | `toml` (codex) |
 | **Init** | `claude` (`init.go`, `maketargets.go`, `gowork.go`), `assess` | `init` | — |
 | **Agents** | `subagent`, `agentpolicy`, `sessionstate`, `compactcheck` | `agent *`, `subagent`, `compact-check` | `creack/pty`, `x/term` |
-| **Telemetry** (hooks + store) | `telemetry`, `privacy`, `resolve`, `distill`, `quota1` | `exec hook`, `hook read`, `hook <event>` (dispatcher, issue 1304), `codex-hook`, `codex-telemetry`, `rate`, `log`, `stats`, `export`, `distill` | `modernc.org/sqlite` |
+| **Telemetry** (hooks + store) | `telemetry`, `privacy`, `resolve`, `distill`, `quota1` | `exec hook`, `hook read`, `hook <event>` and `hook codex <event>` (dispatcher, issue 1304), legacy `codex-hook` / `codex-telemetry` (kept as aliases), `rate`, `log`, `stats`, `export`, `distill` | `modernc.org/sqlite` |
 | **Usage/quota monitor** | `usage`, `rograph`, `uix`, `statusline`, `assess` | `usage`, `load-stream`, `history`, `timeline`, `fetch`, `record`, `agent-collector`, `statusline`, `assess`, `dochistory` | `voxi`, `go-runewidth` |
 | **Issue tracker** | `issues`, `find`, `index`, `feedback` | `issues *`, `find`, `index`, `feedback` | — |
 | **Shared libraries** | `readcard`, `fsutil`, `markdown` | `read` | — |
@@ -96,7 +96,7 @@ The real coupling is in command files that compose several subsystems:
 These do not show up in `go list` but bind the subsystems harder than imports do:
 
 1. **Hook command strings.** `apply` writes `harnez exec hook`, `harnez hook read`,
-   `harnez codex-hook`, and the agy wildcard hook into harness settings. Apply (docs core)
+   `harnez hook codex PreToolUse` (and one `harnez hook codex <Event>` per Codex event), and the agy wildcard hook into harness settings. Apply (docs core)
    thus installs telemetry entry points by binary name.
 2. **Skills and docs text reference other components' CLIs.** Managed AGENTS.md blocks and
    skills tell agents to run `harnez find`, `harnez issues`, `harnez rate`, `harnez read -I`,
@@ -240,7 +240,7 @@ the paths forward, recommends one, and specifies it.
 
 | Path | What it is | Solves | Costs | Reversible |
 |---|---|---|---|---|
-| **E. Status quo** | Users hand-write a `config.yaml` (`hooks: []`, `status_line: false`, no skills) and pass `-c` | selection, today, zero code | no removal of already installed hooks; users fork the whole config and miss upstream changes; embedded config stays all-or-nothing | — |
+| **E. Status quo** | Users hand-write a `config.yaml` (`status_line: false`, no skills; a `hooks:` key is rejected, since hook entries come from `spec/hooks.yaml`) and pass `-c` | selection, today, zero code | no removal of already installed hooks; users fork the whole config and miss upstream changes; embedded config stays all-or-nothing | — |
 | **A. Component selection in the monolith** | `components:` key + `apply --components`; apply phases gated per component | all four 490 use cases at install time | small: one filter in `internal/claude`; no binary or release change | yes, config-only |
 | **B. Multi-binary, one module** | `cmd/harnez-agents`, `cmd/harnez-telemetry` …; `harnez <cmd>` git-style dispatch to `harnez-<cmd>` on PATH | binary size and deps (sqlite, pty), per-component install | release pipeline builds N binaries; hook/skill strings need forwarding shims; smoke tests go multi-binary | mostly; forwarding shims stay |
 | **C. Separate repos/modules** | each component its own repo and version, like `usage` → `../loom` | independent cadence and ownership | cross-repo contracts for spec, config, store; N release pipelines; uman coordination | costly |
@@ -384,7 +384,7 @@ files and command lines, which is what makes B and C possible later:
 
 | Contract | Producer | Consumers | Defined in |
 |---|---|---|---|
-| Hook command strings (`harnez exec hook`, `harnez hook read`, `harnez codex-hook`) | `telemetry` via apply | Claude, Codex, AGY | `config.yaml` `hooks:`, `internal/codex`, `internal/agy` |
+| Hook command strings (`harnez exec hook`, `harnez hook read`, `harnez hook codex <Event>`) | `telemetry` via apply | Claude, Codex, AGY | `spec/hooks.yaml` (`agents`), `internal/codex`, `internal/agy` |
 | `~/.harnez/tool_catalog.sqlite` | `telemetry` | `stats`, `export`, issue snapshots | `spec/telemetry.yaml` |
 | Agent session records (`~/.harnez/agents/`) | `agents` | `agent list/status`, a future telemetry import | `internal/subagent` (to be specced) |
 | Usage snapshots (`harnez usage --json` schema) | `usage` collector (→ loom) | `usage`, statusline, agent dispatch | `internal/usage` (to be specced) |

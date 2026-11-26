@@ -67,9 +67,21 @@ Codex also accepts the legacy blocking form:
 
 ## Harnez implementation note
 
-For a rewrite, `harnez codex-hook` emits the wrapped `hookSpecificOutput` form above. Its
+For a rewrite, `harnez hook codex PreToolUse` emits the wrapped `hookSpecificOutput` form above. Its
 rewritten command is routed through `harnez exec`; the hook itself does not
 execute the command or write telemetry.
+
+**Per-event entries (issue 1304 M3).** `spec/hooks.yaml` under `agents.codex` lists one
+handler per Codex event, and `apply` writes one group per event with a single command:
+`harnez hook codex <Event>` (`PreToolUse`, `PostToolUse`, `PreCompact`, `PostCompact`,
+`SessionStart`, `Stop`, `SessionEnd`). `PreToolUse` runs the rewrite handler (matcher `Bash`);
+the other events run the silent telemetry handler. The matchers are explicit in the spec:
+`PostToolUse` `*`, `SessionStart` `startup|resume|clear|compact`, `SessionEnd` `other`.
+Tool routing is not used for Codex because it would narrow those non-tool matchers.
+The command form `harnez hook codex <Event>` keeps the Codex namespace apart from Claude's
+`harnez hook <Event>`, which already uses the same event names with different handler sets.
+Legacy subcommands `harnez codex-hook` and `harnez codex-telemetry` still run for old
+configs, but `apply` no longer writes them.
 
 For an empty or already-routed command (`⚙ ...` or `harnez exec ...`), it returns
 success with no output. Returning a bare allow caused the transcript warning
@@ -79,11 +91,17 @@ Regression tests cover no-op output and real rewrites; installed-binary payload
 probes confirmed zero-byte no-ops and allow-plus-updatedInput rewrites. These probes
 verify the handler contract, not a separate end-to-end Codex session.
 
-**Ownership.** `~/.codex/config.toml` is shared with the user. A matcher group
-is harnez-owned only when every handler command is `harnez` or starts with
-`harnez `. `codex.Apply` keeps user groups per event and replaces only the
-harnez groups; `codex.Remove` deletes only harnez groups (and the legacy
-`HookName` entry), drops `features.hooks` only when no hooks remain, and
+**Ownership.** `~/.codex/config.toml` is shared with the user. A handler is harnez-owned
+when `hookdispatch.RunsHarnez` says so: after skipping a leading `env` and `VAR=value`
+tokens, the first word (quotes stripped) has base name `harnez`. That covers bare
+`harnez …`, absolute paths such as `/home/u/go/bin/harnez codex-hook`, and env-prefixed forms
+such as `env HARNEZ_TELEMETRY=1 harnez codex-telemetry`. Near misses stay foreign:
+`harnez-foo`, wrapper scripts like `/opt/lint.sh`, and `sh -c harnez`.
+`codex.Apply` strips harnez groups from every event (named `[hooks.<name>]` tables are kept),
+then appends the current `harnez hook codex <Event>` groups, so legacy forms are replaced
+rather than duplicated. A user group on the same event survives.
+`codex.Remove` deletes harnez groups in every form (and the legacy `HookName` entry), drops
+`features.hooks` only when no hooks remain, and
 deletes the file only when it is empty; `codex.Status` compares a harnez-only
 projection, so user groups never count as drift. Before commit `02c9a0b`,
 Remove deleted whole event tables, including user hooks. The same ownership
@@ -172,7 +190,10 @@ Codex 0.160 runs a config hook only when `~/.codex/config.toml` has a matching
 `trusted_hash` under `[hooks.state."<config path>:<event>:0:0"]`. On a fresh
 machine `harnez apply` writes the hooks and `harnez status` reports them `ok`,
 yet Codex skips them until the user approves them in Codex (issue 724). Check
-`harnez log` for `codex-telemetry` calls before trusting hook-based data;
+`harnez log` for `harnez hook codex <Event>` calls before trusting hook-based data
+(the log line format for the new form is unverified against a live Codex session);
+the stored `trusted_hash` may cover the command text, so changing a command after approval
+may need re-approval (unverified: confirm in Codex's trust UI after the first `apply`);
 throwaway automation can pass `codex exec --dangerously-bypass-hook-trust`.
 
 Reference: [OpenAI Codex Hooks](https://developers.openai.com/es-419/docs/hooks).

@@ -86,7 +86,7 @@ and `docs/CLIDesign.md`'s apply/init split).
   the exit code.
 
 The hook entry itself is declarative config, not code: `apply` writes it into
-`~/.claude/settings.json` from `config.yaml`'s `hooks:` list. Installing the hook is
+`~/.claude/settings.json` from `spec/hooks.yaml` (`agents.claude`). Installing the hook is
 `apply`'s job (its existing managed-`"hooks"`-key merge in `internal/claude/apply.go`).
 
 **Since issue 119, `apply` installs only one `PreToolUse`/`Bash` hook: `harnez exec
@@ -129,7 +129,7 @@ names the opt-out.
 - **Response**: See [Codex Hooks — Reference Schema](CodexHooks.md). Codex
   requires `hookSpecificOutput.hookEventName` and nests
   `permissionDecision`/`updatedInput` inside `hookSpecificOutput`.
-- **Config**: `harnez apply` installs `harnez codex-hook`.
+- **Config**: `harnez apply` installs one `harnez hook codex PreToolUse` entry (from `spec/hooks.yaml`, `agents.codex`); the legacy `harnez codex-hook` form is replaced on apply.
 
 ### 3. Google Antigravity (`~/.harnez/shims/bash` & `hooks.json`)
 - **Shell Command Interception (Guarded `bash` PATH shim)**:
@@ -170,7 +170,7 @@ When the wrapped command executes under `harnez exec`, it resolves session and a
    shape (decode payload → decide → encode `hookSpecificOutput` / `overwrite`, or no-op).
 2. Point the rewrite at whatever subcommand does the real work — usually the feature's
    own wrapper form, not a third command.
-3. Wire the hook's `command:` string into `config.yaml` / `hooks.json` and let `apply`'s
+3. Wire the hook's `command:` string into `spec/hooks.yaml` (`agents.<agent>`) / `hooks.json` and let `apply`'s
    existing hooks-merge install it — do not add a new top-level installer command.
 4. If the wrapper stage's own telemetry/side-effect write can fail or block, make it
    best-effort and non-blocking relative to the wrapped command's exit — the hook

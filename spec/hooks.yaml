@@ -1,7 +1,73 @@
 # yaml-language-server: $schema=schemas/hooks.schema.json
 #
-# Claude hook dispatcher (`harnez hook <event>`, issue 1304). handler_timeout
-# bounds one handler's run. It guards against hangs and is not a latency target.
-# It must exceed the largest inner budget, the jev backend timeout in
-# spec/decide.yaml (enforced by internal/hookdispatch tests).
+# Hook dispatcher spec (issue 1304). handler_timeout bounds one handler's run.
+# It guards against hangs and is not a latency target. It must exceed the largest
+# inner budget, the jev backend timeout in spec/decide.yaml (enforced by
+# internal/hookdispatch tests).
+#
+# agents.<name> is one host agent. command is the host command prefix: each
+# event entry runs "<command> <Event>". events lists the handlers that run per
+# event, in order. A handler's kind is its reply contract: json (one reply object
+# or {}), silent (writes nothing), or text (plain text the host adds as context).
+# tools limits a handler to those tool names and derives the host matcher from
+# them. matcher sets an explicit host matcher for an event whose matcher is not a
+# tool list; it cannot be combined with tools.
 handler_timeout: 40s
+agents:
+  claude:
+    command: harnez hook
+    events:
+      PreToolUse:
+        handlers:
+          - {name: exec, kind: json, tools: [Bash]}
+          - {name: read, kind: json, tools: [View, Read, ReadMultipleFiles]}
+          - {name: pre-edit, kind: json, tools: [Edit, Write]}
+      PostToolUse:
+        handlers:
+          - {name: skill, kind: silent, tools: [Skill]}
+      PostToolUseFailure:
+        handlers:
+          - {name: skill, kind: silent, tools: [Skill]}
+      UserPromptSubmit:
+        handlers:
+          - {name: skill, kind: silent}
+      SessionStart:
+        handlers:
+          - {name: claude-instructions, kind: text}
+      PreCompact:
+        handlers:
+          - {name: codex-telemetry, kind: silent}
+          - {name: compact-reset, kind: silent}
+      PostCompact:
+        handlers:
+          - {name: codex-telemetry, kind: silent}
+      Stop:
+        handlers:
+          - {name: sound, kind: silent}
+  codex:
+    command: harnez hook codex
+    events:
+      PreToolUse:
+        handlers:
+          - {name: codex-hook, kind: json, tools: [Bash]}
+      PostToolUse:
+        matcher: "*"
+        handlers:
+          - {name: codex-telemetry, kind: silent}
+      PreCompact:
+        handlers:
+          - {name: codex-telemetry, kind: silent}
+      PostCompact:
+        handlers:
+          - {name: codex-telemetry, kind: silent}
+      SessionStart:
+        matcher: startup|resume|clear|compact
+        handlers:
+          - {name: codex-telemetry, kind: silent}
+      Stop:
+        handlers:
+          - {name: codex-telemetry, kind: silent}
+      SessionEnd:
+        matcher: other
+        handlers:
+          - {name: codex-telemetry, kind: silent}

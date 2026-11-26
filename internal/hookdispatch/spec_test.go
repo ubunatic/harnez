@@ -66,13 +66,13 @@ func TestEmbeddedHooksSpecValidatesAgainstSchema(t *testing.T) {
 // A zero or fractional budget is not a budget: the schema and parseBudget reject it.
 func TestBudgetRejectsZeroAndMalformedValues(t *testing.T) {
 	for _, v := range []string{"0s", "0ms", "0m", "1.5s", "-1s", "40", "forty"} {
-		raw := []byte("handler_timeout: " + v + "\n")
+		raw := budgetSpec(t, v)
 		if _, err := parseBudget(raw); err == nil {
 			t.Errorf("handler_timeout %q accepted", v)
 		}
 	}
 	for _, v := range []string{"1ms", "40s", "2m"} {
-		raw := []byte("handler_timeout: " + v + "\n")
+		raw := budgetSpec(t, v)
 		if _, err := parseBudget(raw); err != nil {
 			t.Errorf("handler_timeout %q rejected: %v", v, err)
 		}

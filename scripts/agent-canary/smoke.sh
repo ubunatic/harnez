@@ -41,7 +41,7 @@ step() {
 }
 
 # hook_runs prints how often harnez recorded the given subcommand, e.g.
-# "codex-telemetry" or "distill hook". Agents run hooks as harnez calls.
+# "hook codex" or "distill hook". Agents run hooks as harnez calls.
 hook_runs() {
    harnez log -500 | grep -c -- " $1 "
 }
@@ -99,7 +99,7 @@ check "Pi skills installed (${pi_skills})" test "${pi_skills}" -gt 0
 check "Codex skills installed (${codex_skills})" test "${codex_skills}" -gt 0
 check "Pi issue skill installed" test -f "${pi_home}/skills/issue/SKILL.md"
 check "Pi Distill extension installed" test -f "${pi_home}/extensions/harnez-distill.ts"
-check "Codex hooks installed" grep -q 'harnez codex-telemetry' "${HOME}/.codex/config.toml"
+check "Codex hooks installed" grep -q 'harnez hook codex' "${HOME}/.codex/config.toml"
 
 step "4. lmcoder model server"
 start="${SECONDS}"
@@ -131,7 +131,9 @@ check "Pi model called bash" grep -q '"type":"tool_execution_start".*"toolName":
 check "Pi fired the Harnez Distill hook" test "$(hook_runs 'distill hook')" -gt "${before}"
 
 step "6. Codex"
-before="$(hook_runs codex-telemetry)"
+# UNVERIFIED: the `harnez log` line format for `harnez hook codex <Event>` is not
+# confirmed against a live Codex run; this count assumes " hook codex " appears in it.
+before="$(hook_runs 'hook codex')"
 start="${SECONDS}"
 # Hook trust bypass: these hooks were just written by harnez apply in this
 # throwaway container, the vetted-automation case the flag is meant for.
@@ -149,7 +151,7 @@ codex_session="$(find "${HOME}/.codex/sessions" -name '*.jsonl' 2>/dev/null | so
 # also writes to ~/.codex/skills are explicit-only and hidden from Codex.
 check "Codex lists every Harnez skill" \
    all_skills_in "${pi_home}/skills" "${codex_session:-/dev/null}" '- %s: '
-check "Codex fired the Harnez hooks" test "$(hook_runs codex-telemetry)" -gt "${before}"
+check "Codex fired the Harnez hooks" test "$(hook_runs 'hook codex')" -gt "${before}"
 
 step "Versions"
 printf '  harnez   %s\n' "$(harnez --version)"

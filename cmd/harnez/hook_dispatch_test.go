@@ -73,7 +73,7 @@ func TestHookRegistryToolRoutingMatchesOldMatchers(t *testing.T) {
 // Every manifest event is a hidden `harnez hook <Event>` command.
 func TestHookEventCommandsRegisteredForEveryManifestEvent(t *testing.T) {
 	root := newHookCmd()
-	for _, event := range hookdispatch.ClaudeManifest.Events() {
+	for _, event := range manifestEvents(t, "claude") {
 		c, _, err := root.Find([]string{event})
 		if err != nil || c.Name() != event || !c.Hidden {
 			t.Errorf("hook %s: command %v, err %v", event, c, err)
@@ -129,6 +129,8 @@ func (e goldenEnv) sendTelemetry(kind string, _ any) {
 
 type goldenCase struct {
 	name, event, payload string
+	// agent selects the registry: "" is Claude, "codex" is Codex.
+	agent string
 	// session names a session whose read-marker dir exists before the run.
 	session string
 	// old is the subcommand behaviour the event replaced.
@@ -173,7 +175,7 @@ func runGoldenSide(t *testing.T, tc goldenCase, budget time.Duration, dispatch b
 	}
 	var out bytes.Buffer
 	if dispatch {
-		reg, err := claudeHookRegistry(env.deps())
+		reg, err := registryFor(tc.agent, env.deps())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -223,6 +225,7 @@ func TestHookDispatchMatchesSubcommandBehaviour(t *testing.T) {
 			old: func(_ context.Context, in io.Reader, out io.Writer, _ goldenEnv) error {
 				return runExecHook(in, out)
 			},
+			wantOut: "⚙",
 		},
 		{
 			name:    "PreToolUse Read large file",
@@ -231,6 +234,15 @@ func TestHookDispatchMatchesSubcommandBehaviour(t *testing.T) {
 			old: func(_ context.Context, in io.Reader, out io.Writer, _ goldenEnv) error {
 				return runClaudeReadHook(in, out, readHookOptions{})
 			},
+		},
+		{
+			name:    "PreToolUse Read plain file",
+			event:   "PreToolUse",
+			payload: `{"tool_name":"Read","tool_input":{"file_path":"` + edit + `"},"session_id":"s1","cwd":"` + repo + `"}`,
+			old: func(_ context.Context, in io.Reader, out io.Writer, _ goldenEnv) error {
+				return runClaudeReadHook(in, out, readHookOptions{})
+			},
+			wantOut: "{}",
 		},
 		{
 			name:    "PreToolUse Edit denied by the backend",
@@ -275,6 +287,7 @@ func TestHookDispatchMatchesSubcommandBehaviour(t *testing.T) {
 			old: func(_ context.Context, _ io.Reader, out io.Writer, _ goldenEnv) error {
 				return runClaudeInstructionsHook(out)
 			},
+			wantOut: "Harnez instruction rule:",
 		},
 		{
 			name:           "PreCompact resets markers and sends codex telemetry",
@@ -302,6 +315,30 @@ func TestHookDispatchMatchesSubcommandBehaviour(t *testing.T) {
 		},
 	}
 
+	runGoldenCases(t, cases)
+}
+
+// registryFor returns the registry for a golden case's agent.
+func registryFor(agent string, deps hookDeps) (hookdispatch.Registry, error) {
+	if agent == "codex" {
+		return codexHookRegistry(deps)
+	}
+	return claudeHookRegistry(deps)
+}
+
+// manifestEvents returns the event names of an embedded agent manifest.
+func manifestEvents(t *testing.T, agent string) []string {
+	t.Helper()
+	m, err := hookdispatch.LoadManifest(agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m.EventNames()
+}
+
+// runGoldenCases runs each case on both sides and checks they agree.
+func runGoldenCases(t *testing.T, cases []goldenCase) {
+	t.Helper()
 	budget, err := hookdispatch.LoadBudget()
 	if err != nil {
 		t.Fatal(err)

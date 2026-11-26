@@ -238,8 +238,8 @@ func TestApplyPreservesUserGroupsOnHarnezEvents(t *testing.T) {
 	if changed {
 		t.Error("second Apply changed the file; want idempotent")
 	}
-	if n := strings.Count(mustRead(t, path), "harnez codex-hook"); n != 1 {
-		t.Errorf("harnez codex-hook appears %d times, want 1", n)
+	if n := strings.Count(mustRead(t, path), "harnez hook codex PreToolUse"); n != 1 {
+		t.Errorf("harnez hook codex PreToolUse appears %d times, want 1", n)
 	}
 }
 

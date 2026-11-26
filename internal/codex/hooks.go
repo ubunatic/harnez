@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"ubunatic.com/harnez/internal/hookdispatch"
 )
 
 // HookName is the legacy named hook entry ([hooks.harnez]) earlier harnez
@@ -36,62 +37,37 @@ func HooksPath(home string) string {
 	return filepath.Join(home, ".codex", "config.toml")
 }
 
-// BuildHooksDoc returns the harnez-managed "harnez" named hook entry: a
-// PreToolUse hook matching Codex's "Bash" shell-tool matcher (per 199's
-// Q2 — real installed plugin hooks.json files on the research machine use
-// "Bash" as a matcher value, and Codex's PreToolUse schema is otherwise a
-// near-exact mirror of Claude Code's own, which also matches "Bash"),
-// whose command handler is `harnez codex-hook` (the hidden PreToolUse
-// handshake command implemented in cmd/harnez/codexhooks.go; installation
-// itself happens via `harnez apply`, not a separate management command).
+// BuildHooksDoc returns the harnez-managed hook groups for config.toml: one
+// group per event of the codex agent in spec/hooks.yaml, each running
+// `harnez hook codex <Event>` (issue 1304 M3). PreToolUse runs codex-hook
+// for the Bash matcher; the other events run codex-telemetry. The embedded
+// spec is validated by tests, so a failure here is a build defect and panics.
 //
-// timeoutSec is intentionally omitted: issue 199's Q5 confirmed a
-// per-hook timeoutSec field exists, but the real default numeric value
-// was not recoverable from binary strings alone, and pinning it down
-// would require either upstream Codex docs or a live hook-trust
-// experiment out of scope for this ticket (see
-// issues/200-codex-native-hooks-preTooluse-wiring.md Scope point 4).
-// Omitting the field lets Codex apply its own built-in default rather
-// than harnez guessing a value that could be wrong in either direction
-// (too short: spurious "hook timed out" failures on slow harnez exec
-// calls; too long: a stalled hook blocks the tool call longer than
-// necessary).
+// timeoutSec is intentionally omitted: Codex applies its own built-in default
+// rather than harnez guessing a value that could be wrong in either direction
+// (see issues/200-codex-native-hooks-preTooluse-wiring.md Scope point 4).
 func BuildHooksDoc() map[string]any {
+	manifest, err := hookdispatch.LoadManifest("codex")
+	if err != nil {
+		panic(err)
+	}
+	entries, err := manifest.Entries()
+	if err != nil {
+		panic(err)
+	}
+	hooks := map[string]any{}
+	for _, e := range entries {
+		group := map[string]any{
+			"hooks": []map[string]any{{"type": "command", "command": e.Command}},
+		}
+		if e.Matcher != "" {
+			group["matcher"] = e.Matcher
+		}
+		hooks[e.Event] = []map[string]any{group}
+	}
 	return map[string]any{
 		"features": map[string]any{"hooks": true},
-		"hooks": map[string]any{
-			"PreToolUse": []map[string]any{
-				{
-					"matcher": "Bash",
-					"hooks": []map[string]any{
-						{"type": "command", "command": "harnez codex-hook"},
-					},
-				},
-			},
-			"PostToolUse": []map[string]any{
-				{
-					"matcher": "*",
-					"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
-				},
-			},
-			"PreCompact": []map[string]any{{
-				"hooks": []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
-			}},
-			"PostCompact": []map[string]any{{
-				"hooks": []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
-			}},
-			"SessionStart": []map[string]any{{
-				"matcher": "startup|resume|clear|compact",
-				"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
-			}},
-			"Stop": []map[string]any{{
-				"hooks": []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
-			}},
-			"SessionEnd": []map[string]any{{
-				"matcher": "other",
-				"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
-			}},
-		},
+		"hooks":    hooks,
 	}
 }
 
@@ -140,8 +116,16 @@ func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 	}
 	mergedHooks := map[string]any{}
 	if existingHooks, ok := out["hooks"].(map[string]any); ok {
+		// Strip harnez groups from every event, not only the events incoming
+		// defines, so a command harnez no longer writes cannot linger.
 		for k, v := range existingHooks {
-			mergedHooks[k] = v
+			if tableArray(v) == nil {
+				mergedHooks[k] = v
+				continue
+			}
+			if kept := userGroups(v); len(kept) > 0 {
+				mergedHooks[k] = kept
+			}
 		}
 	}
 	if incomingHooks, ok := incoming["hooks"].(map[string]any); ok {
@@ -394,7 +378,9 @@ func tableArray(v any) []map[string]any {
 	return nil
 }
 
-// isHarnezGroup reports whether every handler in a hook group runs harnez.
+// isHarnezGroup reports whether every handler in a hook group runs harnez, by
+// the rule shared with apply's Claude side (hookdispatch.RunsHarnez). That covers
+// the bare legacy `harnez codex-hook`, absolute-path and env-prefixed forms.
 func isHarnezGroup(group map[string]any) bool {
 	handlers := tableArray(group["hooks"])
 	if len(handlers) == 0 {
@@ -402,8 +388,7 @@ func isHarnezGroup(group map[string]any) bool {
 	}
 	for _, h := range handlers {
 		cmd, _ := h["command"].(string)
-		cmd = strings.TrimSpace(cmd)
-		if cmd != "harnez" && !strings.HasPrefix(cmd, "harnez ") {
+		if !hookdispatch.RunsHarnez(cmd) {
 			return false
 		}
 	}
