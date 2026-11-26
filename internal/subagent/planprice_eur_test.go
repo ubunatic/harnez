@@ -9,9 +9,9 @@ import (
 func TestPlanPriceClaudeProIsEURConvertedOnce(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	got, err := PlanPriceFor("claude")
-	// EUR 18 at the spec's ECB rate 1.0935 USD per EUR is 19.683 USD.
-	if err != nil || got == nil || *got != 19_683_000 {
-		t.Fatalf("claude Pro price = %v, err=%v; want 19683000 USD micros", got, err)
+	// EUR 15 net (180 yearly / 12) at the spec's ECB rate 1.0935 USD per EUR is 16.4025 USD.
+	if err != nil || got == nil || *got != 16_402_500 {
+		t.Fatalf("claude Pro price = %v, err=%v; want 16402500 USD micros", got, err)
 	}
 }
 

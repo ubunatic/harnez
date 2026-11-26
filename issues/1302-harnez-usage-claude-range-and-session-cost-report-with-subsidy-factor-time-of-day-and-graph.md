@@ -60,3 +60,9 @@
 - **Live plan share not yet seen.** No canary turn has yet shown a live `paired` quota outcome with a filled `subscription_price_share_micros`. Every short canary reused one cached usage snapshot. Since M4 these are classified `unchanged_snapshot`, and before M4 they paired as 0 deltas with a null share. The long haiku:med session in this sprint must show at least one `paired` row with a nonzero delta and a share that matches a hand calculation: delta fraction × weekly plan share.
 - **Turn records keep the alias.** The session JSON `TurnRecord.Model` (`populateTurnCostRecord`) still stores the session alias (`opus`). The DB rows store the reported id since #1301 M4. Align the JSON when the report reads turn records.
 - **Concurrent sessions skew per-turn deltas.** Other Claude sessions on the same plan (for example ../splitty, ../taia) move the quota during a turn. Per-turn deltas are therefore an upper bound, and quota per dollar has to be analysed as totals over time windows.
+- **Plan price fixed (owner, 2026-11-26).** The owner pays Pro yearly: €180 net + 19% VAT = €214.20. `spec/agent.yaml` now stores €15/month net, replacing the earlier €18 default; that is $16.4025/month at the ECB rate.
+  - Decision: use net, because the API list prices also exclude VAT, so the subsidy factor compares like with like.
+  - The report should say "net". Showing the owner's gross cost as a second line would be useful.
+- **The share code has the same reset-jitter bug that #1301 M4 fixed in SQL.** `ComputeTurnQuotaShare` (`internal/usage/turnquota.go:222`) calls `sameResetMarker`, which uses exact `time.Equal` (`turnquota.go:165`). The canary resets differ by about 0.18 s, so the in-session share is nil even when the DB delta pairs.
+  - Fix: use the `turn_quota_pairing.reset_tolerance` from `spec/usage.yaml`.
+  - This is a prerequisite for the live plan-share check above.

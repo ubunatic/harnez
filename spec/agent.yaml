@@ -12,10 +12,11 @@ plan_prices:
     plan: "Plus"
     monthly_usd_micros: 20000000
   claude:
-    # Owner's plan (ticket 1301): Pro at EUR 18 net of VAT, host default until an invoice figure.
+    # Owner's plan: Pro billed yearly, EUR 180 net + 19% VAT = EUR 214.20 (owner, 2026-11-26).
+    # Stored net (API list prices exclude VAT too): 180 / 12 = EUR 15 per month.
     plan: "Pro"
     currency: "EUR"
-    monthly_eur_micros: 18000000
+    monthly_eur_micros: 15000000
   agy:
     plan: "Pro"
     monthly_usd_micros: 20000000
