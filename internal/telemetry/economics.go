@@ -51,15 +51,7 @@ func (r RequestTokens) PromptTokens() int64 {
 // It returns (nil, false) when any non-zero count has no rate: unknown is
 // never reported as 0.
 func RequestCostMicros(pricing ModelPricing, req RequestTokens) (*int64, bool) {
-	rates := pricing.Rates
-	prompt := req.PromptTokens()
-	var threshold int64 = -1
-	for _, tier := range pricing.Tiers {
-		if prompt > tier.OverInputTokens && tier.OverInputTokens > threshold {
-			rates = tier.Rates
-			threshold = tier.OverInputTokens
-		}
-	}
+	rates := tierRates(pricing, req.PromptTokens())
 	parts := []struct {
 		tokens int64
 		rate   *int64
@@ -81,6 +73,37 @@ func RequestCostMicros(pricing ModelPricing, req RequestTokens) (*int64, bool) {
 		total += roundedMicros(part.tokens, *part.rate)
 	}
 	return &total, true
+}
+
+// tierRates returns the rates for a prompt of promptTokens: the highest tier whose
+// over_input_tokens the prompt exceeds, else the base rates. Compaction economics
+// and per-call request cost both use this rule (issue 1303 M2).
+func tierRates(pricing ModelPricing, promptTokens int64) PricingRates {
+	rates := pricing.Rates
+	var threshold int64 = -1
+	for _, tier := range pricing.Tiers {
+		if promptTokens > tier.OverInputTokens && tier.OverInputTokens > threshold {
+			rates = tier.Rates
+			threshold = tier.OverInputTokens
+		}
+	}
+	return rates
+}
+
+// promptTokens is the prompt size of a snapshot: its total input when reported,
+// else uncached plus cached input.
+func (u TokenUsage) promptTokens() int64 {
+	if u.InputTokens != nil {
+		return *u.InputTokens
+	}
+	var total int64
+	if u.UncachedInputTokens != nil {
+		total += *u.UncachedInputTokens
+	}
+	if u.CachedInputTokens != nil {
+		total += *u.CachedInputTokens
+	}
+	return total
 }
 
 // CalculateTurnCost estimates one turn's API cost in micro-USD using pricing rates.
@@ -176,7 +199,7 @@ func CalculateCompactionEconomics(model string, pricing ModelPricing, input Econ
 		return result
 	}
 	var partial bool
-	result.CompactionCost, partial = estimateCost(*input.Compaction, pricing.Rates)
+	result.CompactionCost, partial = estimateCost(*input.Compaction, tierRates(pricing, input.Compaction.promptTokens()))
 	if result.CompactionCost == nil {
 		result.Status = EconomicsInsufficient
 		result.Note = "no priced compaction components"
@@ -186,7 +209,7 @@ func CalculateCompactionEconomics(model string, pricing ModelPricing, input Econ
 		result.Status = EconomicsPartial
 	}
 	postPartial := false
-	result.PostCompactionCost, postPartial = estimateCost(*input.PostCompaction, pricing.Rates)
+	result.PostCompactionCost, postPartial = estimateCost(*input.PostCompaction, tierRates(pricing, input.PostCompaction.promptTokens()))
 	if result.PostCompactionCost == nil {
 		result.Status = EconomicsInsufficient
 		result.Note = "no priced post-compaction components"
@@ -201,7 +224,7 @@ func CalculateCompactionEconomics(model string, pricing ModelPricing, input Econ
 		return result
 	}
 	baselinePartial := false
-	result.BaselineCost, baselinePartial = estimateCost(*input.NoCompactionBase, pricing.Rates)
+	result.BaselineCost, baselinePartial = estimateCost(*input.NoCompactionBase, tierRates(pricing, input.NoCompactionBase.promptTokens()))
 	if result.BaselineCost == nil {
 		result.Status = EconomicsInsufficient
 		result.Note = "no priced baseline components"

@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -392,4 +393,71 @@ func TestClaudeFillPendingRefusesUnsafeSessionID(t *testing.T) {
 			t.Errorf("read for session id %q reported a record", id)
 		}
 	}
+}
+
+// TestClaudeFillRollsBackPartialWriteAndNextAttemptFills injects a failure after the
+// row update (issue 1303 M2). No partial state remains: the row stays empty, the
+// snapshot and economics counts are unchanged and the pending record survives. The
+// next attempt, with no fault, fills the row.
+func TestClaudeFillRollsBackPartialWriteAndNextAttemptFills(t *testing.T) {
+	isolateCompactEnv(t)
+	dbPath, db := openCompactDB(t)
+	transcript := writeTranscript(t, claudeAssistantLineFixture)
+	processPrepared(t, db, fillRaw("PreCompact", transcript))
+	processPrepared(t, db, fillRaw("PostCompact", transcript))
+	appendTranscriptLine(t, transcript, fmt.Sprintf(claudeBoundaryLineFmt, time.Now().UTC().Format(time.RFC3339Nano), m1dPreTokens, m1dPostTokens))
+
+	snapshotsBefore := snapshotCount(t, dbPath, fillSession, "precompact") + snapshotCount(t, dbPath, fillSession, "postcompact")
+	economicsBefore := filledEconomicsCount(t, dbPath, fillSession)
+
+	claudeFillFault = func(stage string) error {
+		if stage != "after-row" {
+			return nil
+		}
+		return errors.New("injected failure after row update")
+	}
+	t.Cleanup(func() { claudeFillFault = nil })
+	p, ok := readClaudeFillPending(fillSession)
+	if !ok {
+		t.Fatal("no pending fill before the attempt")
+	}
+	if _, err := claudeFillStep(db, p, "event"); err == nil {
+		t.Fatal("injected failure was not returned")
+	}
+	if total, _ := postcompactRow(t, dbPath, fillSession); total.Valid {
+		t.Fatalf("failed attempt left total_tokens %d on the row", total.Int64)
+	}
+	if got := snapshotCount(t, dbPath, fillSession, "precompact") + snapshotCount(t, dbPath, fillSession, "postcompact"); got != snapshotsBefore {
+		t.Fatalf("failed attempt changed snapshot rows: %d, want %d", got, snapshotsBefore)
+	}
+	if got := filledEconomicsCount(t, dbPath, fillSession); got != economicsBefore {
+		t.Fatalf("failed attempt changed economics rows: %d, want %d", got, economicsBefore)
+	}
+	if _, ok := readClaudeFillPending(fillSession); !ok {
+		t.Fatal("failed attempt dropped the pending record; the next attempt could not fill")
+	}
+
+	claudeFillFault = nil
+	filled, err := claudeFillStep(db, p, "retry:1")
+	if err != nil || !filled {
+		t.Fatalf("next attempt filled=%v err=%v, want filled", filled, err)
+	}
+	if total, _ := postcompactRow(t, dbPath, fillSession); !total.Valid || total.Int64 != m1dPostTokens {
+		t.Fatalf("row total_tokens = %v, want %d after the next attempt", total, m1dPostTokens)
+	}
+	if got := filledEconomicsCount(t, dbPath, fillSession); got <= economicsBefore {
+		t.Fatal("next attempt did not reconcile the economics row")
+	}
+}
+
+// filledEconomicsCount counts the session's economics rows that carry a compaction
+// cost, so a reconciled row is visible even though the row count is unchanged.
+func filledEconomicsCount(t *testing.T, dbPath, sessionID string) int {
+	t.Helper()
+	db := openRawCompactDB(t, dbPath)
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM compaction_economics WHERE session_id = ? AND compaction_cost_micros IS NOT NULL`, sessionID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }

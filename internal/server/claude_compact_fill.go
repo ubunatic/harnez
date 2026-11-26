@@ -135,7 +135,8 @@ func claudeFillNext(dbPath, sessionID string, index int) {
 
 // claudeFillFire is one scheduled re-read. It opens the DB by path, because the timer
 // runs outside the event that armed it. A failed attempt arms the next re-read, and
-// the last one drops the record.
+// the last one drops the record. An applied fill drops the record here, after its
+// own transaction has committed.
 func claudeFillFire(dbPath, sessionID string, index int) {
 	p, ok := readClaudeFillPending(sessionID)
 	if !ok {
@@ -146,6 +147,7 @@ func claudeFillFire(dbPath, sessionID string, index int) {
 		applied, stepErr := claudeFillStep(db, p, fmt.Sprintf("retry:%d", index+1))
 		_ = db.Close()
 		if stepErr == nil && applied {
+			removeClaudeFillPending(sessionID)
 			return
 		}
 	}
@@ -182,10 +184,17 @@ func claudeFillOnEvent(db *telemetry.DB, sessionID string) error {
 	return err
 }
 
+// claudeFillFault is a test seam (issue 1303 M2). It runs inside the fill's
+// transaction after the row update, and a non-nil error fails the attempt there.
+// Production leaves it nil.
+var claudeFillFault func(stage string) error
+
 // claudeFillStep reads the pending row's transcript once. When the boundary belongs
-// to this compaction, it fills the row, writes the snapshots, reconciles and drops
-// the record; filledAfter names the attempt that filled it. Every attempt writes one
-// diagnostic note. It reports whether the row was filled.
+// to this compaction, it fills the row, writes the snapshots and reconciles in one
+// transaction, so a failure leaves no partial state. filledAfter names the attempt
+// that filled it. The caller drops the pending record once the fill is committed;
+// a record left behind is dropped by the next attempt, which finds the row filled.
+// Every attempt writes one diagnostic note. It reports whether the row was filled.
 func claudeFillStep(db *telemetry.DB, p claudeFillPending, filledAfter string) (bool, error) {
 	compact, readErr := scanClaudeCompact(p.TranscriptPath)
 	preAt := p.PreCompactAt
@@ -201,7 +210,30 @@ func claudeFillStep(db *telemetry.DB, p claudeFillPending, filledAfter string) (
 	}
 	filled := out.reason == reasonApplied
 	if filled {
-		updated, err := db.FillCompactionEvent(p.RowID, compact.PostTokens, compact.Model)
+		catalog, err := telemetry.LoadPricingCatalog("")
+		if err != nil {
+			return false, err
+		}
+		updated := false
+		err = db.InTransaction(func(tx *telemetry.DB) error {
+			var err error
+			updated, err = tx.FillCompactionEvent(p.RowID, compact.PostTokens, compact.Model)
+			if err != nil || !updated {
+				return err
+			}
+			if claudeFillFault != nil {
+				if err := claudeFillFault("after-row"); err != nil {
+					return err
+				}
+			}
+			if err := insertClaudeSnapshot(tx, p.SessionID, "precompact", nil, compact.PreTokens); err != nil {
+				return err
+			}
+			if err := insertClaudeSnapshot(tx, p.SessionID, "postcompact", &p.BoundaryID, compact.PostTokens); err != nil {
+				return err
+			}
+			return tx.ReconcileCompactionEconomics(p.SessionID, compact.Model, catalog)
+		})
 		if err != nil {
 			return false, err
 		}
@@ -210,20 +242,6 @@ func claudeFillStep(db *telemetry.DB, p claudeFillPending, filledAfter string) (
 			removeClaudeFillPending(p.SessionID)
 			return true, nil
 		}
-		if err := insertClaudeSnapshot(db, p.SessionID, "precompact", nil, compact.PreTokens); err != nil {
-			return false, err
-		}
-		if err := insertClaudeSnapshot(db, p.SessionID, "postcompact", &p.BoundaryID, compact.PostTokens); err != nil {
-			return false, err
-		}
-		catalog, err := telemetry.LoadPricingCatalog("")
-		if err != nil {
-			return false, err
-		}
-		if err := db.ReconcileCompactionEconomics(p.SessionID, compact.Model, catalog); err != nil {
-			return false, err
-		}
-		removeClaudeFillPending(p.SessionID)
 	} else {
 		filledAfter = ""
 	}

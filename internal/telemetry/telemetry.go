@@ -139,6 +139,34 @@ type sqlExecutor interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
+// InTransaction runs fn atomically (issue 1303 M2). Outside a transaction it
+// begins one and commits when fn returns nil. Inside a collector record's
+// transaction it uses a savepoint, so a failed fn undoes only its own writes and
+// the record's other writes still commit.
+func (d *DB) InTransaction(fn func(*DB) error) error {
+	if d.tx != nil {
+		if _, err := d.tx.Exec("SAVEPOINT harnez_atomic"); err != nil {
+			return err
+		}
+		if err := fn(d); err != nil {
+			_, _ = d.tx.Exec("ROLLBACK TO harnez_atomic")
+			_, _ = d.tx.Exec("RELEASE harnez_atomic")
+			return err
+		}
+		_, err := d.tx.Exec("RELEASE harnez_atomic")
+		return err
+	}
+	tx, err := d.sql.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := fn(&DB{sql: d.sql, tx: tx, path: d.path}); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // WithReceipt atomically applies a collector record once.
 func (d *DB) WithReceipt(id string, apply func(*DB) error) error {
 	tx, err := d.sql.BeginTx(context.Background(), nil)

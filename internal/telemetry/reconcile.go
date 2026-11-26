@@ -171,7 +171,13 @@ func persistedEconomics(sessionID string, eventID *int64, pricing ModelPricing, 
 		baseline = &economics.BaselineCost.TotalMicros
 	}
 	savings = economics.SavingsMicros
-	p := PersistedEconomics{SessionID: sessionID, CompactionEventID: eventID, Model: economics.Model, PricingRevision: economics.PricingRevision, Rates: pricing.Rates, Status: economics.Status, CompactionCostMicros: compaction, PostCompactionCostMicros: post, BaselineCostMicros: baseline, SavingsMicros: savings, Note: economics.Note}
+	rates := pricing.Rates
+	if src := input.Compaction; src != nil {
+		rates = tierRates(pricing, src.promptTokens())
+	} else if src := input.PostCompaction; src != nil {
+		rates = tierRates(pricing, src.promptTokens())
+	}
+	p := PersistedEconomics{SessionID: sessionID, CompactionEventID: eventID, Model: economics.Model, PricingRevision: economics.PricingRevision, Rates: rates, Status: economics.Status, CompactionCostMicros: compaction, PostCompactionCostMicros: post, BaselineCostMicros: baseline, SavingsMicros: savings, Note: economics.Note}
 	src := input.Compaction
 	if src == nil {
 		src = input.PostCompaction
