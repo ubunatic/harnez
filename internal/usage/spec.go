@@ -61,6 +61,25 @@ type quotaPairSpec struct {
 type usageReportSpec struct {
 	UnexplainedTolerancePct *float64 `yaml:"unexplained_tolerance_pct"`
 	MinSessionQuotaPct      *float64 `yaml:"min_session_quota_pct"`
+	MinLocalFactor          *float64 `yaml:"min_local_factor"`
+}
+
+// ReportMinLocalFactor returns usage_report.min_local_factor from
+// spec/usage.yaml (ticket 1302 M4): a rise whose local API cost over its plan
+// cost is below this is quiet, not explained locally. A missing value is an error.
+func ReportMinLocalFactor() (float64, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return 0, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return 0, err
+	}
+	if spec.UsageReport.MinLocalFactor == nil {
+		return 0, fmt.Errorf("usage_report.min_local_factor is missing")
+	}
+	return *spec.UsageReport.MinLocalFactor, nil
 }
 
 // ReportMinSessionQuotaPct returns usage_report.min_session_quota_pct from

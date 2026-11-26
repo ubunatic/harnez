@@ -265,14 +265,29 @@ id, the final streamed usage kept. Each call is priced by its own model
 window in `quota-history.jsonl` (agent `claude`, no group, window
 `usage.ClaudeWeeklyWindowName`), grouped into windows by `reset_at` within
 `turn_quota_pairing.reset_tolerance`. A rise is measured from the highest value
-seen in its window, so a dip and recovery is not counted twice. Each rise is
-attributed over its interval: from the previous rise (or the window start, or
-the range start for the first) up to the rising sample, so calls in flat
-stretches count. The rise is split across the sessions with priced calls in
-that interval, by API cost. A rise with no priced call is "not explained
-locally" when the unexplained total exceeds `usage_report.unexplained_tolerance_pct`.
-Plan cost is the share times the weekly plan price (net); gross adds
-`plan_vat_rate`. Unpriced or unknown values print `n/a`, never 0.
+seen in its window, so a dip and recovery is not counted twice. A Claude weekly
+row without `reset_at` is skipped and counted, never joined or split. Each
+rise's interval runs from the previous rise, or from the window's first sample
+(the window start when that sample is 0%), up to the rising sample, so calls in
+flat stretches count. Intervals are half-open `[Start, End)`; `Start` is clamped
+to `--since` for display. Transcripts last modified before `--since` are not read.
+The rise is split across the sessions with priced calls in its interval, by API
+cost. A rise with no priced call is "not explained locally" when the unexplained
+total exceeds `usage_report.unexplained_tolerance_pct`. So is a quiet rise: its
+local API cost over its plan cost (`cost / (pp / 100 x weekly plan)`) is below
+`usage_report.min_local_factor` (default 0.1; a measured per-rise factor
+distribution in the spec comment). Plan cost is the share times the weekly plan
+price (net); gross adds `plan_vat_rate`. Unpriced or unknown values print `n/a`,
+never 0; a session with any unpriced call has `n/a` for API, attributed, pending
+and factor, and the report counts those calls. Without a plan price the factor
+column prints a plain `n/a`.
+
+Every priced in-range call lands in exactly one bucket (`buckets` in `--json`):
+`attributed` (inside a rise that got a share), `quiet` (inside a quiet rise),
+`before_first_sample` (before a window's first sample, when that sample is not
+0%), `after_older_window` (after an older window's last rise), and `pending`
+(after the newest window's last rise, or inside a rise that ends after `--until`).
+The five sum to the total priced API cost.
 
 Text columns: `API $` is all priced calls of the session; `ATTRIB $` is the API
 cost of calls inside a rise; `PENDING $` is the API cost of calls after the last

@@ -123,6 +123,10 @@ func runUsageReport(w io.Writer, f usageReportFlags) error {
 	if err != nil {
 		return err
 	}
+	minLocal, err := usage.ReportMinLocalFactor()
+	if err != nil {
+		return err
+	}
 	calls, err := usagereport.ScanCalls(projectsDir, since)
 	if err != nil {
 		return fmt.Errorf("read claude transcripts: %w", err)
@@ -130,7 +134,7 @@ func runUsageReport(w io.Writer, f usageReportFlags) error {
 	rep := usagereport.Build(calls, samples, usagereport.Options{
 		Since: since, Until: until, Session: f.Session, Catalog: catalog,
 		ResetTolerance: resetTol, WeeklyPlanMicros: weekly, VATRate: vat,
-		UnexplainedTolerancePct: unexplainedTol, MinSessionQuotaPct: minSession,
+		UnexplainedTolerancePct: unexplainedTol, MinSessionQuotaPct: minSession, MinLocalFactor: minLocal,
 	})
 	if f.JSON {
 		return usagereport.RenderJSON(w, rep)

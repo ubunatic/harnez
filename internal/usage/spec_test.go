@@ -10,6 +10,36 @@ import (
 	"ubunatic.com/harnez"
 )
 
+// The report's quiet-rise threshold comes from the spec (ticket 1302 M4): it
+// loads, is non-negative, and the schema requires it, so a missing key is caught
+// by the schema and by the loader.
+func TestReportMinLocalFactorFromSpec(t *testing.T) {
+	v, err := ReportMinLocalFactor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != 0.1 || v < 0 {
+		t.Fatalf("usage_report.min_local_factor = %v, want 0.1 from embedded spec", v)
+	}
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/schemas/usage.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Required   []string                   `json:"required"`
+			Properties map[string]json.RawMessage `json:"properties"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(data, &schema); err != nil {
+		t.Fatal(err)
+	}
+	report := schema.Properties["usage_report"]
+	if !strings.Contains(strings.Join(report.Required, ","), "min_local_factor") || report.Properties["min_local_factor"] == nil {
+		t.Fatalf("schema usage_report does not require min_local_factor: %+v", report)
+	}
+}
+
 func TestEmbeddedUsageSpec(t *testing.T) {
 	age, err := agyMeterMaxAge()
 	if err != nil {
