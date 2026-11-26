@@ -27,6 +27,7 @@ type usageSpec struct {
 	AgentQuotaWarnPercent    float64            `yaml:"agent_quota_warn_percent"`
 	AgentQuotaMaxReadingAge  string             `yaml:"agent_quota_max_reading_age"`
 	TurnQuotaPairing         quotaPairSpec      `yaml:"turn_quota_pairing"`
+	TurnQuota                turnQuotaSpec      `yaml:"turn_quota"`
 	UsageReport              usageReportSpec    `yaml:"usage_report"`
 	CollectorTimeout         string             `yaml:"collector_timeout"`
 	PassiveDedupeInterval    string             `yaml:"passive_dedupe_interval"`
@@ -51,6 +52,37 @@ type usageSpec struct {
 	StrataCacheTTL           string             `yaml:"strata_cache_ttl"`
 	UsageKillLog             usageKillLogSpec   `yaml:"usage_kill_log"`
 	ViewModes                usageViewModesSpec `yaml:"view_modes"`
+}
+
+type turnQuotaSpec struct {
+	Timeout            string `yaml:"timeout"`
+	CompactCacheMaxAge string `yaml:"compact_cache_max_age"`
+}
+
+// turnQuotaSpecValues loads turn_quota from spec/usage.yaml (issue 1303 M2): the
+// turn-quota fetch timeout and the compaction sample's cache age. Nothing here
+// defaults them: a missing or invalid value is an error.
+func turnQuotaSpecValues() (timeout, compactCacheMaxAge time.Duration, err error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return 0, 0, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return 0, 0, err
+	}
+	timeout, err = time.ParseDuration(spec.TurnQuota.Timeout)
+	if err != nil {
+		return 0, 0, fmt.Errorf("turn_quota.timeout: %w", err)
+	}
+	compactCacheMaxAge, err = time.ParseDuration(spec.TurnQuota.CompactCacheMaxAge)
+	if err != nil {
+		return 0, 0, fmt.Errorf("turn_quota.compact_cache_max_age: %w", err)
+	}
+	if timeout <= 0 || compactCacheMaxAge <= 0 {
+		return 0, 0, fmt.Errorf("turn_quota values must be positive")
+	}
+	return timeout, compactCacheMaxAge, nil
 }
 
 type quotaPairSpec struct {

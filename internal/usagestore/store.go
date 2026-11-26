@@ -657,7 +657,10 @@ func (s *Store) WriteLoadObservation(ctx context.Context, provider string, obser
 // WriteTurnQuotaBoundary stores the event and its source-tagged quota windows.
 // ImportKey makes JSONL imports safe to retry without suppressing live events.
 func (s *Store) WriteTurnQuotaBoundary(ctx context.Context, boundary TurnQuotaBoundary) (int64, error) {
-	if boundary.SessionID == "" || boundary.Turn < 1 || boundary.Provider == "" || (boundary.Boundary != "before" && boundary.Boundary != "after") {
+	// A "compact" sample (issue 1303 M2) belongs to no agent turn, so it is stored
+	// with turn 0 and never pairs with before/after rows.
+	validTurn := (boundary.Boundary == "before" || boundary.Boundary == "after") && boundary.Turn >= 1 || boundary.Boundary == "compact" && boundary.Turn == 0
+	if boundary.SessionID == "" || !validTurn || boundary.Provider == "" {
 		return 0, fmt.Errorf("invalid turn quota boundary")
 	}
 	if boundary.CapturedAt.IsZero() {

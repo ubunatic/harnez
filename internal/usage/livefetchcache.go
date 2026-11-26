@@ -130,6 +130,41 @@ func lockLiveFetchCache(path string) (f *os.File, ok bool) {
 	return nil, false
 }
 
+// lockLiveFetchCacheOnce is lockLiveFetchCache with one non-blocking attempt, for a
+// caller that must not wait on another process (issue 1303 M2).
+func lockLiveFetchCacheOnce(path string) (*os.File, bool) {
+	if path == "" {
+		return nil, false
+	}
+	// The cache directory may not exist yet on a first compaction (the XDG cache
+	// dir is created lazily), so create it before taking the sidecar lock.
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, false
+	}
+	f, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, false
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		return nil, false
+	}
+	return f, true
+}
+
+type liveFetchLockHeldKey struct{}
+
+// withLiveFetchLockHeld tells CollectClaude that the caller already holds the
+// cross-process cache lock, so it must not take the lock again (issue 1303 M2).
+func withLiveFetchLockHeld(ctx context.Context) context.Context {
+	return context.WithValue(ctx, liveFetchLockHeldKey{}, true)
+}
+
+func liveFetchLockHeld(ctx context.Context) bool {
+	held, _ := ctx.Value(liveFetchLockHeldKey{}).(bool)
+	return held
+}
+
 func unlockLiveFetchCache(f *os.File) {
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	_ = f.Close()

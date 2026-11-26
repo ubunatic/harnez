@@ -392,9 +392,15 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		// lock can't be acquired quickly, still perform the fetch and use
 		// its result in-memory for this call and still store it in SQLite,
 		// but skip the JSON mirror and the legacy history append.
-		lockFile, locked := lockLiveFetchCache(cachePath)
-		if locked {
-			defer unlockLiveFetchCache(lockFile)
+		// A caller that already holds the lock (the compaction sample, issue 1303 M2)
+		// must not take it again: a second flock would wait out its retries.
+		locked := liveFetchLockHeld(ctx)
+		if !locked {
+			var lockFile *os.File
+			lockFile, locked = lockLiveFetchCache(cachePath)
+			if locked {
+				defer unlockLiveFetchCache(lockFile)
+			}
 		}
 
 		fetched, status, fetchErr := fetchClaudeQuota(ctx, client, ClaudeCredentials{ClaudeAiOauth: oauth})

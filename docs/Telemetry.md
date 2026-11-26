@@ -312,6 +312,31 @@ factor is its API cost over its quota share times the weekly plan. `SAMPLES`
 counts attributed rises with a share in that hour. A sparkline shows the factor
 of each attributed rise. `--json` carries `hours`, `series` and `window`.
 
+## Compaction Quota Sample (issue 1303 M2)
+
+Each Claude PostCompact the collector stores also gets one quota sample: a
+`turn_quota_boundaries` row with `boundary = 'compact'`, `turn = 0`, the
+compaction record's ID as its import key (a replayed record stores no second
+sample), and `captured_at`, `cache_age_ms`, `has_cache`, `source` and `error`.
+`source` is `compact-cache` (cache younger than `turn_quota.compact_cache_max_age`,
+no fetch), `compact-fetch` (refreshed under the non-blocking live-fetch lock,
+bounded by `turn_quota.timeout`) or `compact-locked` (another process held the
+lock, so the cached sample is stored with its age). `usage.CaptureCompactQuota`
+does the read; `cmd/harnez` schedules it after the record's commit, never in the
+hook process. A failed read is stored as the row's `error`; the compaction rows
+are not changed. A future pairing must skip rows with an `error`.
+
+Planned consumer (not implemented; a report change, out of scope for M2): the
+#1302 Claude range report (`harnez usage history report`) would pair two compact
+samples of one session, in `captured_at` order. The API cost of the calls
+between the two compactions is then set against the weekly quota rise between
+their samples, the same way the report attributes a rise today. It reads the
+weekly rows of `quota-history.jsonl` for now, so this would be a second input.
+Unverified: the pairing needs the same reuse check as `turn_quota_pairing`
+(a sample whose `captured_at - cache_age_ms` equals the other's is a reused
+reading and must not pair), and it is not measured how often two compactions
+fall inside one weekly window with a usable rise.
+
 ## Per-Turn API Cost & Subscription Share (issue 1215)
 
 Each completed harnez agent turn records its API list-price estimate and

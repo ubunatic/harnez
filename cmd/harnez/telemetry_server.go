@@ -237,6 +237,10 @@ func processTelemetryRecordResult(ctx context.Context, record server.TelemetryRe
 	switch record.Kind {
 	case "tool_call", "agy_post_tool", "codex", "agy_compaction", "cli_invocation", "issue_snapshot":
 		err := server.WithTelemetryReceipt(dbPath, record.RecordID, func(tx *telemetry.DB) error { return processTelemetryWrite(record, tx) })
+		if err == nil && record.Kind == "codex" {
+			// The quota sample runs after the record's commit (issue 1303 M2).
+			scheduleClaudeCompactQuota(dbPath, record)
+		}
 		return nil, err
 	}
 	switch record.Kind {

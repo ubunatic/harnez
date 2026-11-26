@@ -80,13 +80,18 @@ func preflightCodex(ctx context.Context, provider string, driver subagent.Driver
 }
 
 func recordTurnQuota(dbPath string, capture func(context.Context, string, bool) usage.TurnQuotaReading, sessionID, provider string, turn int, boundary string, force bool, turnStarted, baselineCacheAt time.Time) usage.TurnQuotaReading {
-	ctx, cancel := context.WithTimeout(context.Background(), usage.TurnQuotaTimeoutForProvider(provider))
-	defer cancel()
 	var reading usage.TurnQuotaReading
-	if capture != nil {
-		reading = capture(ctx, provider, force)
+	timeout, err := usage.TurnQuotaTimeoutForProvider(provider)
+	if err != nil {
+		reading = usage.TurnQuotaReading{CapturedAt: time.Now().UTC(), Error: err.Error()}
 	} else {
-		reading = agentTurnQuotaReader(ctx, provider, force, turnStarted, baselineCacheAt)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if capture != nil {
+			reading = capture(ctx, provider, force)
+		} else {
+			reading = agentTurnQuotaReader(ctx, provider, force, turnStarted, baselineCacheAt)
+		}
 	}
 	stored := usage.TurnQuotaBoundaryFromReading(sessionID, provider, turn, boundary, reading)
 	if dbPath != "" {
@@ -99,7 +104,11 @@ func captureTurnQuota(parent context.Context, capture func(context.Context, stri
 	if parent == nil {
 		parent = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(parent, usage.TurnQuotaTimeoutForProvider(provider))
+	timeout, err := usage.TurnQuotaTimeoutForProvider(provider)
+	if err != nil {
+		return usage.TurnQuotaReading{CapturedAt: time.Now().UTC(), Error: err.Error()}
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	if capture != nil {
 		return capture(ctx, provider, force)

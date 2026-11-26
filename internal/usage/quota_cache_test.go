@@ -105,11 +105,23 @@ func TestQuotaCachePathsAreProviderIsolated(t *testing.T) {
 }
 
 func TestTurnQuotaTimeoutIsProviderSpecificAndJSONRemainsBackwardCompatible(t *testing.T) {
-	if TurnQuotaTimeoutForProvider("claude") != TurnQuotaTimeout || TurnQuotaTimeoutForProvider("codex") != TurnQuotaTimeout {
-		t.Fatal("HTTP providers must retain the 1.8s turn quota timeout")
+	claude, err := TurnQuotaTimeoutForProvider("claude")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if TurnQuotaTimeoutForProvider("agy") <= agyUsageCmdTimeout {
-		t.Fatalf("AGY turn quota timeout %s does not cover its %s probe", TurnQuotaTimeoutForProvider("agy"), agyUsageCmdTimeout)
+	codex, err := TurnQuotaTimeoutForProvider("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claude != 1800*time.Millisecond || codex != claude {
+		t.Fatalf("HTTP providers timeout claude=%s codex=%s, want the spec's 1.8s for both", claude, codex)
+	}
+	agy, err := TurnQuotaTimeoutForProvider("agy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agy <= agyUsageCmdTimeout {
+		t.Fatalf("AGY turn quota timeout %s does not cover its %s probe", agy, agyUsageCmdTimeout)
 	}
 
 	var old TurnQuotaReading
@@ -294,7 +306,7 @@ func TestCaptureTurnQuotaSinceReusesCacheRefreshedDuringTurn(t *testing.T) {
 		return nil, fmt.Errorf("unexpected quota fetch")
 	})}
 	oldFactory := turnQuotaHTTPClientFactory
-	turnQuotaHTTPClientFactory = func() *http.Client { return client }
+	turnQuotaHTTPClientFactory = func(time.Duration) *http.Client { return client }
 	defer func() { turnQuotaHTTPClientFactory = oldFactory }()
 
 	reading := CaptureTurnQuotaSinceCache(context.Background(), "claude", false, turnStarted, turnStarted)
@@ -325,7 +337,7 @@ func TestCaptureTurnQuotaSinceForcesPreTurnCache(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"five_hour":{"utilization":39}}`)), Request: r}, nil
 	})}
 	oldFactory := turnQuotaHTTPClientFactory
-	turnQuotaHTTPClientFactory = func() *http.Client { return client }
+	turnQuotaHTTPClientFactory = func(time.Duration) *http.Client { return client }
 	defer func() { turnQuotaHTTPClientFactory = oldFactory }()
 
 	turnStarted := time.Now().Add(-time.Second)

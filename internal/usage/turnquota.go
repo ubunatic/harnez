@@ -26,19 +26,20 @@ type TurnQuotaReading struct {
 	Error                        string              `json:"error,omitempty"`
 }
 
-const TurnQuotaTimeout = 1800 * time.Millisecond
 const AGYTurnQuotaTimeout = agyUsageCmdTimeout + 2*time.Second
 
 // TurnQuotaTimeoutForProvider returns the bounded budget for a turn-boundary
-// quota reading. AGY's local /usage command has its own longer process bound.
-func TurnQuotaTimeoutForProvider(provider string) time.Duration {
+// quota reading: turn_quota.timeout from spec/usage.yaml for the HTTP providers
+// (issue 1303 M2). AGY's local /usage command has its own longer process bound.
+func TurnQuotaTimeoutForProvider(provider string) (time.Duration, error) {
 	if provider == "agy" {
-		return AGYTurnQuotaTimeout
+		return AGYTurnQuotaTimeout, nil
 	}
-	return TurnQuotaTimeout
+	timeout, _, err := turnQuotaSpecValues()
+	return timeout, err
 }
 
-var turnQuotaHTTPClientFactory = func() *http.Client { return &http.Client{Timeout: TurnQuotaTimeout} }
+var turnQuotaHTTPClientFactory = func(timeout time.Duration) *http.Client { return &http.Client{Timeout: timeout} }
 
 // CaptureTurnQuota observes a provider's quota, using the regular shared cache
 // for ordinary captures and bypassing its freshness gate when force is true.
@@ -58,7 +59,11 @@ func CaptureTurnQuotaSince(ctx context.Context, provider string, force bool, tur
 // before the provider turn started, preventing another process's later cache
 // write from being mistaken for a measurement made during this turn.
 func CaptureTurnQuotaSinceCache(ctx context.Context, provider string, force bool, turnStarted, baselineCacheAt time.Time) TurnQuotaReading {
-	ctx, cancel := context.WithTimeout(ctx, TurnQuotaTimeoutForProvider(provider))
+	timeout, err := TurnQuotaTimeoutForProvider(provider)
+	if err != nil {
+		return TurnQuotaReading{CapturedAt: time.Now().UTC(), Error: err.Error()}
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cachePath, err := providerQuotaCachePath(provider)
 	if err != nil {
@@ -78,7 +83,7 @@ func CaptureTurnQuotaSinceCache(ctx context.Context, provider string, force bool
 	if err != nil {
 		return TurnQuotaReading{CapturedAt: time.Now().UTC(), Error: err.Error()}
 	}
-	client := turnQuotaHTTPClientFactory()
+	client := turnQuotaHTTPClientFactory(timeout)
 	var u AgentUsage
 	switch provider {
 	case "claude":

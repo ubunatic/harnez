@@ -29,6 +29,14 @@ agent_quota_max_reading_age: 2m
 turn_quota_pairing:
   reset_tolerance: 60s
   snapshot_tolerance: 1s
+# Turn quota (ticket 1303 M2). timeout bounds one live turn-quota fetch for the HTTP
+# providers; it was a Go constant. compact_cache_max_age: a Claude compaction's quota
+# sample reads a cache this young without fetching; an older cache is refreshed under
+# the live-fetch lock. 5m equals collector_cadence above. Unverified: the endpoint's
+# rate limit is not measured, so a compaction-driven fetch rate is unknown.
+turn_quota:
+  timeout: 1800ms
+  compact_cache_max_age: 5m
 # Usage report (ticket 1302 M1). A weekly quota rise in an interval with no local
 # API call is "not explained locally"; the report line shows only above this many
 # percentage points (quota history moves in 1% steps).
