@@ -44,11 +44,10 @@
 
 ## Note (host, 2026-11-26): compaction limits for the long Haiku session
 
-- The owner's `~/.claude/settings.json` sets `modelSettings` → `autoCompactWindow: 200000` for `claude-haiku-5-5` and `claude-opus-5-5`; there is no block for Sonnet.
+- The owner's `~/.claude/settings.json` sets `modelSettings` → `autoCompactWindow: 200000` for Haiku, Opus and Sonnet 5.5. The owner set Sonnet's through the Claude TUI on 2026-11-26.
 - harnez agent runs `claude -p` with the same HOME, so this applies there too. docs/AutoCompaction.md measured that `-p` honours the window. With the default buffer of about 33k, native compaction should start near 167k; that figure is an estimate.
 - The harnez threshold (80k for Haiku, from spec `compact_thresholds`) compacts between turns and fires first.
 - For a session over 100k: raise the harnez threshold for Haiku above about 170k. The native 200k window then sets the ceiling, so the session can pass 100k and stay below about 167k.
-- `docs/AutoCompaction.md:58` says there is "also a Sonnet block", but there is none any more; fix that doc line.
 
 ## Note (1301 M2, 2026-11-26): coverage of per-turn rows
 
