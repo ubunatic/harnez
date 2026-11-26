@@ -435,6 +435,28 @@ at a scratch directory for the whole test process, not just `-t`.
 
 Scans the repository (or target file/directory) against the machine-readable glossary (`spec/glossary.yaml` and `.harnez/glossary.yaml`). Emits human-readable findings in unix diagnostic format (`file:line:col: message [glossary]`) or JSON (`--json`). Exits 0 in report mode; enforce via `harnez lint --check` in CI.
 
+## Claude hook dispatch (`harnez hook <event>`)
+
+`harnez hook <event>` (hidden) is one command per Claude hook event: `PreToolUse`, `PostToolUse`,
+`PostToolUseFailure`, `UserPromptSubmit`, `SessionStart`, `PreCompact`, `PostCompact`, `Stop`.
+It reads the payload from stdin once and runs every registered handler for that event, in
+registry order, under one time budget per handler (`spec/hooks.yaml`, `handler_timeout`).
+The registry lives in `cmd/harnez/hook_dispatch.go`; the generic dispatch and merge live in
+`internal/hookdispatch`. Handler failures never fail the hook: a failed, panicking or slow
+handler loses only its own output and leaves a note on stderr.
+
+- Tool routing: a handler with `Tools` runs only for those `tool_name` values, as the old
+  per-tool matchers did, so one event entry can serve several tools.
+- Merge: one handler's reply passes through byte for byte. With two or more replies,
+  `PreToolUse` decisions follow `deny` > `defer` > `ask` > `allow` (ties keep the first reason),
+  the first `updatedInput` wins, and `additionalContext` and `systemMessage` are joined with
+  newlines. SessionStart text replies are joined with newlines. An event cannot mix JSON and
+  text handlers; the registry rejects it.
+
+The old subcommands (`exec hook`, `hook read`, `hook pre-edit`, `hook skill`, and so on) still run
+their handlers directly. Until `apply` writes one entry per event (issue 1304 M2), the installed
+settings keep calling them.
+
 ## Known gaps
 
 - `diff` and `revert --managed` are global-only and have no awareness of project Makefiles — see issue #009.

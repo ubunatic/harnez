@@ -115,6 +115,9 @@ func newHookCmd() *cobra.Command {
 	})
 	cmd.AddCommand(newHookSoundCmd())
 	cmd.AddCommand(newSkillHookCmd())
+	for _, event := range claudeHookRegistry(nil).Events() {
+		cmd.AddCommand(newHookEventCmd(event))
+	}
 
 	return cmd
 }
