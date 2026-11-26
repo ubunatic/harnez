@@ -95,6 +95,13 @@ func (r Registry) Events() []string {
 // exceeds the budget loses only its own output; the others still count. The
 // merged reply goes to out. Dispatch returns an error only for a misconfigured
 // call (unknown event, invalid registry, no budget), never for a handler failure.
+//
+// A handler that exceeds the budget is abandoned, not stopped: its goroutine
+// keeps running until the process exits and may still write its own state
+// (SQLite rows, telemetry, marker files) after Dispatch has returned. Its
+// output is never read, so it cannot reach out. Handlers share no state, and
+// the process exits right after Dispatch, so the window is one handler's own
+// side effects (issue 1304 M1 review, finding 3: accepted and documented).
 func Dispatch(ctx context.Context, reg Registry, event string, raw []byte, out io.Writer, opts Options) error {
 	if err := reg.Validate(); err != nil {
 		return err
@@ -115,6 +122,7 @@ func Dispatch(ctx context.Context, reg Registry, event string, raw []byte, out i
 	tool := toolName(raw)
 
 	var replies [][]byte
+	var empty []byte // the first `{}` reply: "no decision", kept for the no-reply case
 	var kind Kind
 	for _, h := range handlers {
 		if len(h.Tools) > 0 && !slices.Contains(h.Tools, tool) {
@@ -125,7 +133,8 @@ func Dispatch(ctx context.Context, reg Registry, event string, raw []byte, out i
 			fmt.Fprintf(opts.Stderr, "harnez hook %s: handler %s dropped: %v\n", event, h.Name, err)
 			continue
 		}
-		if len(bytes.TrimSpace(data)) == 0 {
+		trimmed := bytes.TrimSpace(data)
+		if len(trimmed) == 0 {
 			continue
 		}
 		if h.Kind == Silent {
@@ -133,9 +142,15 @@ func Dispatch(ctx context.Context, reg Registry, event string, raw []byte, out i
 			continue
 		}
 		kind = h.Kind
+		if h.Kind == JSON && string(trimmed) == "{}" {
+			if empty == nil {
+				empty = data
+			}
+			continue
+		}
 		replies = append(replies, data)
 	}
-	return writeReplies(out, opts.Stderr, event, kind, replies)
+	return writeReplies(out, opts.Stderr, event, kind, replies, empty)
 }
 
 // runHandler runs one handler on its own goroutine. The reply is read only
@@ -168,11 +183,16 @@ func runHandler(ctx context.Context, h Handler, raw []byte, budget time.Duration
 }
 
 // writeReplies writes the merged reply. One reply passes through byte for byte,
-// so a single handler behaves exactly as it did when it ran alone.
-func writeReplies(out, errOut io.Writer, event string, kind Kind, replies [][]byte) error {
+// so a single handler behaves exactly as it did when it ran alone. With no
+// real reply, the first `{}` reply (if any) is written verbatim.
+func writeReplies(out, errOut io.Writer, event string, kind Kind, replies [][]byte, empty []byte) error {
 	switch len(replies) {
 	case 0:
-		return nil
+		if empty == nil {
+			return nil
+		}
+		_, err := out.Write(empty)
+		return err
 	case 1:
 		_, err := out.Write(replies[0])
 		return err

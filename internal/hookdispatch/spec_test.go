@@ -50,3 +50,31 @@ func TestHandlerBudgetExceedsInnerDecideTimeouts(t *testing.T) {
 		}
 	}
 }
+
+// The embedded spec must satisfy spec/schemas/hooks.schema.json, the same way
+// access spec is checked (issue 1304 M1 review, finding 5).
+func TestEmbeddedHooksSpecValidatesAgainstSchema(t *testing.T) {
+	raw, err := harnez.DefaultFS.ReadFile("spec/hooks.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateSpec(raw); err != nil {
+		t.Fatalf("spec/hooks.yaml: %v", err)
+	}
+}
+
+// A zero or fractional budget is not a budget: the schema and parseBudget reject it.
+func TestBudgetRejectsZeroAndMalformedValues(t *testing.T) {
+	for _, v := range []string{"0s", "0ms", "0m", "1.5s", "-1s", "40", "forty"} {
+		raw := []byte("handler_timeout: " + v + "\n")
+		if _, err := parseBudget(raw); err == nil {
+			t.Errorf("handler_timeout %q accepted", v)
+		}
+	}
+	for _, v := range []string{"1ms", "40s", "2m"} {
+		raw := []byte("handler_timeout: " + v + "\n")
+		if _, err := parseBudget(raw); err != nil {
+			t.Errorf("handler_timeout %q rejected: %v", v, err)
+		}
+	}
+}
