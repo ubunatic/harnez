@@ -62,4 +62,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 1297 | [1297-add-direct-tests-for-debug-logging.md](1297-add-direct-tests-for-debug-logging.md) | Add direct tests for debug logging | Open |
 | 1302 | [1302-harnez-usage-claude-range-and-session-cost-report-with-subsidy-factor-time-of-day-and-graph.md](1302-harnez-usage-claude-range-and-session-cost-report-with-subsidy-factor-time-of-day-and-graph.md) | harnez usage: Claude range and session cost report with subsidy factor, time of day and graph | Open |
 | 1303 | [1303-claude-compaction-record-context-size-and-a-quota-sample-at-compact.md](1303-claude-compaction-record-context-size-and-a-quota-sample-at-compact.md) | Claude compaction: record context size and a quota sample at compact | Open |
+| 1304 | [1304-harnez-apply-one-hook-entry-per-agent-event-dispatch-inside-harnez.md](1304-harnez-apply-one-hook-entry-per-agent-event-dispatch-inside-harnez.md) | harnez apply: one hook entry per agent event, dispatch inside harnez | Open |
 <!-- harnez:end issues-active-index -->
