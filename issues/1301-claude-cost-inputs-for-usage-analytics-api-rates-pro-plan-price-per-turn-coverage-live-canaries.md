@@ -67,3 +67,33 @@ Re-check all of this against live code and data first.
 - API rates are in USD. The spec must hold the plan currency and a USD→EUR rate with its source and date, so costs can be compared in one currency. The developer proposes the schema; keep existing `monthly_usd_micros` users working, or migrate them in the same commit.
 - Sprint roles: developer `claude:haiku:med`. The host reviews; there is no reviewer agent, and opus is consulted only if really needed. The M3 canaries are run by the host, because the developer is a leaf worker and cannot call `harnez agent`. The developer supplies the canary prompts and the hand-check query.
 - No long-context override in this sprint: that measurement belongs to #1302.
+
+## Plan turn (dev-1301, 2026-11-26) and M1 pre-work
+
+The developer confirmed the premises and corrected them:
+- There are 4 zero-delta Claude rows (2 turns × 2 windows), not 2.
+- All 112 Claude turn rows have null `cost_micros`.
+- `opus` is stored as a bare model string, so the exact-key lookup in `internal/telemetry/economics.go:19` misses it.
+- New bug: `claude.go:233` counts cache-creation as cached input, and `agent_run.go` subtracts it again, so **cache writes are priced nowhere**. `estimateCost` has no cache-write term, and a nil rate yields a partial total reported as complete.
+
+Rates verified by the host with a direct fetch on 2026-11-26 from https://platform.claude.com/docs/en/about-claude/pricing. USD per MTok, in the order input / 5m write / 1h write / cache read / output:
+- Opus 5.5: 4 / 5 / 8 / 0.20 / 20
+- Sonnet 5.5: 2 / 2.50 / 4 / 0.10 / 10
+- Haiku 5.5, prompts up to 100,000 tokens: 0.10 / 0.125 / 0.20 / 0.01 / 0.50
+- Haiku 5.5, prompts over 100,000 tokens: 0.50 / 0.625 / 1 / 0.05 / 2.50
+
+On the tier: the page says the prompt length "counts all of its input tokens, including cache reads and cache writes", and each request is priced on its own. That means per API call: the tier is decided per request, not per harnez turn total. Exactly 100,000 is the lower tier, by the page's "up to" / "over" wording; that is inferred, so test 99,999, 100,000 and 100,001. If the turn record cannot see per-request prompt sizes, say so and mark the cost as an estimate. Never price a multi-request turn on its summed input.
+
+FX: ECB reference rate 1 EUR = 1.0935 USD on 2026-11-25 (https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/eurofxref-graph-usd.en.html). The plan price is €18/month net (see Decision).
+
+Haiku 5.5 context: 1M window, with native auto-compact at about 967K (https://code.claude.com/docs/en/model-config). Only harnez's 80k threshold compacts it early, which matters for #1302.
+
+M1 go, with these changes to the plan:
+- The schema as proposed, with `source` and `fetched` on every rate entry and on the FX block.
+- Keep DB values in USD and convert the plan price once at load.
+- Use the 1h write rate only if transcripts tell the two apart (`cache_creation.ephemeral_1h_input_tokens`); otherwise price at 5m and record that.
+
+M2 go:
+- Coverage limit: only harnez agent turns write per-turn rows. Document it in the usage or telemetry docs as the source rule for #1302.
+- Zero deltas: prove or refute the "forced fetch does not refresh Claude" hypothesis with a unit test, then fix it.
+- Duplicates: find the root cause first, with a reproduction test, then dedupe.
