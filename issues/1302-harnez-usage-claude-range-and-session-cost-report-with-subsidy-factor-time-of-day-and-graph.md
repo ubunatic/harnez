@@ -76,3 +76,24 @@
 - **Resolved.** The 1301 M2 note "cumulative row still counts cache writes" was fixed in #1301 M3.
 - **Plan price.** €15/month net, as above. Label it net, and show gross €17.85 as a second line.
 - **Data sources.** Tests use fixture transcripts and quota history under `t.TempDir()`, never the real HOME. Only the host runs the installed binary on real data.
+
+## Plan turn review (host) and M1 pre-work
+
+The developer's plan is accepted with the following decisions and changes.
+
+1. **Command.** New `harnez usage history report [--since 7d | --window weekly] [--session <id>] [--json]`. `harnez stats --agents` stays unchanged. Reason: the report reads analytical history and belongs with `usage history`. Add the command to `docs/CLIDesign.md`.
+2. **Hourly factor: not flat.** A flat split (weekly ÷ 168) would only measure activity, not the EU-morning hypothesis. The question is whether one API dollar uses less quota at some hours.
+   - Per local hour: factor = API cost in that hour ÷ (quota delta in that hour × the weekly plan price).
+   - The hour's quota delta comes from the quota-history rises inside that hour.
+   - Show the sample count per hour, and print "n/a" for hours with no quota rise or no cost.
+   - This is M2 work. M1 must still store the per-interval data M2 needs.
+3. **Reset jitter in quota history too.** Group quota-history samples into windows by `reset_at` within `turn_quota_pairing.reset_tolerance`, the same spec value as #1301 M4. Raw `reset_at` drifts by up to about 0.2 s between samples. Do not add a second tolerance for this.
+4. **Transcript layout.** Before you rely on `~/.claude/projects/*/*.jsonl`, check whether Claude Code also writes sub-agent or sidechain transcripts in nested directories. Use only `ls`/`find` on file names and never read real transcript content. Include the nested ones if they exist, deduped by message id across files. Each file's `message.model` sets that call's price, as in `claudeCallPricing`.
+5. **Double counting.** Harnez worker sessions run `claude -p` under the same HOME, so their calls are already in the transcripts. The report counts only the transcripts and never adds the `turn_token_usage` rows on top. It may join to those rows only to label a session as a harnez agent session.
+6. **The tolerance for "not explained locally"** goes in `spec/usage.yaml` with a schema entry, as you planned. Start at 1 percentage point, because quota history moves in 1% steps.
+7. **Plan cost per session** = attributed share × the weekly plan price (net). Totals show net and gross; gross = net × 1.19. Put the VAT rate in spec next to the plan price, never as a Go constant.
+8. **Prerequisites as planned.** Apply the reset tolerance in `sameResetMarker` / `ComputeTurnQuotaShare`. Make `rec.Model` use the reported `r.Model`.
+9. **Stale Plan lines.** "Keyed by timestamp" means bucketed by timestamp and deduped by message id. The compaction threshold is already 200000. Both are noted here; the Plan text stays as it is.
+10. **Commit split.** Commit M1 as two commits, so the review can take them separately:
+    - first the prerequisites (`fix(usage): ... (issue 1302 M1)`);
+    - then the report (`feat(usage): ... (issue 1302 M1)`).
