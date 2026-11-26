@@ -1,0 +1,7 @@
+# yaml-language-server: $schema=schemas/hooks.schema.json
+#
+# Claude hook dispatcher (`harnez hook <event>`, issue 1304). handler_timeout
+# bounds one handler's run. It guards against hangs and is not a latency target.
+# It must exceed the largest inner budget, the jev backend timeout in
+# spec/decide.yaml (enforced by internal/hookdispatch tests).
+handler_timeout: 40s

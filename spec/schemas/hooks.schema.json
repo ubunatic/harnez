@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HookDispatchSpec",
+  "description": "Budgets for the `harnez hook <event>` dispatcher (issue 1304)",
+  "type": "object",
+  "required": ["handler_timeout"],
+  "properties": {
+    "handler_timeout": {
+      "type": "string",
+      "pattern": "^[0-9]+(ms|s|m)$",
+      "description": "Time budget for one handler run, as a Go duration with an ms, s or m suffix"
+    }
+  },
+  "additionalProperties": false
+}
