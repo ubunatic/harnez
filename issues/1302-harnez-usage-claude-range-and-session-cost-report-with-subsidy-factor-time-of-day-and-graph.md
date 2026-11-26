@@ -128,3 +128,35 @@ M1 was delivered in two commits: the prerequisites (6e0406e3) and the range repo
 6. Then M2 as planned (ticket "Plan turn review" item 2): the per-local-hour factor with its sample count, "n/a" for hours without data, a sparkline, and `series` in `--json`.
 
 Owner decision 2026-11-26: the `~/.harnez/config.yaml` Haiku 200k override **stays** after the sprint.
+
+## M2 review (host)
+
+M2 was delivered in two commits: the Claude-only fix (acfa193e) and the hourly factor (7b95c969). The red-first tests are real. The old tests changed only in the fixture helper's window name, and no assertion was removed.
+
+**Real data, host run of the installed binary**
+- `--window weekly` gives a rise of 34 pp. Quota history goes 37 → 71 in the current window (reset 2026-11-28 11:00Z), so the rise checks out.
+- `--since 7d` gives a rise of 53 pp. The extra 19 pp is from 2026-11-19 to 11-21, for example 67 → 76 on 11-20.
+- There are no local calls in that period: only one transcript file was last modified then. The report rightly lists those 19 pp as "not explained locally", probably the second machine or web use. The owner checks esprimo's online times.
+
+**What is still wrong: attribution only sees calls in the ~30 s before a rise**
+- Each `Interval` runs from the sample just before a rise to the rising sample, e.g. 10:05:33 → 10:06:00. Calls made during flat stretches, which built up the next 1% step, fall into no interval.
+- Result: only 24 of 34 pp are attributed. The total factor is $37.09 of *all* calls ÷ the plan cost of the 24 attributed pp, which is 40.8x. That mixes two bases.
+- Per-session factors jump from 0.08x to 63x because of where a 1% step happened to land. One example: session f8441a87 gets 1 pp for $0.003.
+
+## M3 pre-work (attribution fix, then close-out)
+
+1. **Interval = from the previous rise point to this rise.** Within one window, interval k runs from the time the value last rose, or the window start or range start for the first, to the sample where it rises again. Every call in the window then falls into exactly one interval. A rise with no priced call in its interval stays "not explained locally".
+   - Test: calls spread over a flat stretch get the rise.
+   - Test: the sum of attributed call costs equals the total API cost of calls inside closed intervals.
+2. **Calls after the last rise belong to an open interval.** List them as "pending (no quota step yet)" with their API cost. They get no quota share and must not count in the factor.
+3. **Totals use one base.** Total factor = API cost of attributed calls ÷ plan cost of attributed pp.
+   - Also print a window line: API cost of all local calls ÷ (window rise × weekly plan). Label it "upper bound on local quota" or similar, since other machines add to the rise.
+   - Test that the parts add up.
+4. **Per-session factor noise.** A session with less than 1 pp attributed has a factor driven by the 1% step size. Print its factor as "n/a (< 1 pp)", or mark it, and say so in the legend. Set the threshold in `spec/usage.yaml` with a schema entry, starting at 1 pp.
+5. **Hours.** Keep a call's share in the call's local hour, as M2 does. After item 1 the hour table covers all attributed calls. The SAMPLES column counts attributed rises with a share in that hour.
+6. **Plausibility before commit**, quoting only aggregate lines:
+   - `--window weekly`: attributed pp plus not explained equals the rise of 34 pp or more.
+   - Attributed API cost plus pending API cost equals the total API cost.
+   - Quote the totals line, the window line and the hour table.
+7. **Docs.** Add the report's columns and the meaning of attribution, pending, "not explained locally" and the factor bases to `docs/Telemetry.md`, next to the M1 text.
+8. **Then gates.** Run `HTO=0 make test-q1` to `scratchpad/q1-1302.log` and quote the final summary line. Do not close the ticket; the host closes it after the long Haiku session check.
