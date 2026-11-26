@@ -9,67 +9,11 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"ubunatic.com/harnez/internal/hookdispatch"
 )
 
-// claudeCompactNow and claudeCompactSleep are the wait clock. Tests replace them
-// so the boundary poll runs without real sleeps (issue 1303 M1b).
-var (
-	claudeCompactNow   = time.Now
-	claudeCompactSleep = time.Sleep
-)
-
-// waitClaudeCompact polls the transcript for a complete compact boundary at most
-// boundary_window old. Claude may append its boundary after the PostCompact hook
-// has started, so one read can miss it (issue 1303 M1b). The poll stops after
-// boundary_wait, which keeps the hook under handler_timeout. A boundary older
-// than the cutoff belongs to an earlier compaction and is skipped.
-// The reason is the hook's outcome when no fresh boundary is returned: a read
-// error, no boundary at all, or only a boundary older than the cutoff (issue
-// 1303 M1c).
-// The cutoff is the later of the window and since, this compaction's PreCompact
-// time (issue 1303 M1d). An older boundary inside the window is an earlier
-// compaction's and must not end the wait. A zero since keeps the window alone.
-func waitClaudeCompact(path string, wait hookdispatch.ClaudeCompactWait, since time.Time) (*claudeCompact, string) {
-	cutoff := claudeCompactNow().Add(-wait.Window)
-	if since.After(cutoff) {
-		cutoff = since
-	}
-	polls := int(wait.Wait / wait.Poll)
-	for slept := 0; ; slept++ {
-		c, err := scanClaudeCompact(path)
-		reason := reasonNoBoundary
-		switch {
-		case err != nil:
-			reason = reasonReadError
-		case c == nil:
-		case c.Timestamp.Before(cutoff):
-			reason = reasonStaleBoundary
-		default:
-			return c, ""
-		}
-		if slept >= polls {
-			return nil, reason
-		}
-		claudeCompactSleep(wait.Poll)
-	}
-}
-
-// readClaudePostCompact is the PostCompact read and returns the boundary with the
-// hook's reason. Only Claude's payload (it carries compact_summary) waits for the
-// boundary; Codex reads once. An unreadable spec falls back to one read, which
-// the spec tests guard against at build time.
-func readClaudePostCompact(path string, claude bool, since time.Time) (*claudeCompact, string) {
-	if !claude {
-		return singleClaudeCompactRead(path)
-	}
-	wait, err := hookdispatch.LoadClaudeCompactWait()
-	if err != nil {
-		return singleClaudeCompactRead(path)
-	}
-	return waitClaudeCompact(path, wait, since)
-}
+// The PostCompact hook reads the transcript once and never waits. Claude writes the
+// compact boundary after PostCompact returns, so the collector fills the row later
+// from a re-read (issue 1303 M1e).
 
 // singleClaudeCompactRead is one read with no freshness check. The collector
 // decides whether the boundary follows the PreCompact row.

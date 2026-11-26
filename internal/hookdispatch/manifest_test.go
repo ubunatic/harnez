@@ -168,9 +168,7 @@ func TestEmbeddedManifestHandlerNames(t *testing.T) {
 // mutate it.
 const minimalSpec = `handler_timeout: 40s
 claude_compact:
-  boundary_window: 10m
-  boundary_wait: 3s
-  boundary_poll: 100ms
+  fill_retry: [2s, 10s, 60s]
 agents:
   claude:
     command: harnez hook
@@ -239,7 +237,7 @@ func TestParseManifestRejectsBadSpec(t *testing.T) {
 		"bad tool name":          strings.Replace(minimalSpec, "kind: silent}", "kind: silent, tools: [Bash|Read]}", 1),
 		"missing timeout":        strings.Replace(minimalSpec, "handler_timeout: 40s\n", "", 1),
 		"bad timeout":            strings.Replace(minimalSpec, "40s", "forty", 1),
-		"no agents":              "handler_timeout: 40s\nclaude_compact:\n  boundary_window: 10m\n  boundary_wait: 3s\n  boundary_poll: 100ms\n",
+		"no agents":              "handler_timeout: 40s\nclaude_compact:\n  fill_retry: [2s, 10s, 60s]\n",
 		"missing claude_compact": strings.Replace(minimalSpec, "claude_compact:", "claude_compact_removed:", 1),
 		// An explicit matcher and handler tools are two sources for one matcher.
 		"matcher with handler tools": strings.Replace(strings.Replace(minimalSpec,

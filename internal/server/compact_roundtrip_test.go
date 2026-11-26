@@ -1,7 +1,6 @@
 package server
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -12,14 +11,11 @@ import (
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
-// Issue 1303 M1d: the live failure. A session that compacts twice in a few
-// minutes already has an older complete boundary in its transcript when the
-// second PostCompact runs. Claude has not flushed the new boundary yet, so the
-// first read finds the old one. It is inside boundary_window, so the hook takes
-// it as fresh and never waits. The collector then sees it predates this
-// compaction's PreCompact row and marks it stale. This test round-trips a
-// real-shaped payload through the record JSON the socket uses, and writes the
-// new boundary during the first wait poll (the clock is faked; no sleeps).
+// Issue 1303 M1e: a real-shaped Claude compaction round-trips through the record
+// JSON the socket uses. At ingest the transcript holds only an older boundary, so
+// the PostCompact row stays empty and a fill is armed. Claude writes the new
+// boundary after PostCompact returns; the first scheduled re-read fills the row.
+// The fill timer is faked, so the test never sleeps.
 const (
 	m1dSessionID  = "claude-m1d"
 	m1dPreTokens  = 157210
@@ -57,71 +53,73 @@ func wireRecord(t *testing.T, prepared []byte) []byte {
 	return decoded.Payload
 }
 
-// The second compaction's boundary must reach its PostCompact row, even though
-// an older boundary is still inside the window when PostCompact first reads.
-func TestCompactRoundTripRealShapeAppliesBoundary(t *testing.T) {
-	isolateCompactEnv(t)
-	start := time.Now().UTC()
-	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
-	db, err := telemetry.Open(dbPath)
+// processWire prepares a raw hook payload and feeds it through the socket wire format.
+func processWire(t *testing.T, db *telemetry.DB, raw []byte) {
+	t.Helper()
+	prepared, err := PrepareCodexTelemetry(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
+	if err := ProcessCodexTelemetryTx(db, wireRecord(t, prepared)); err != nil {
+		t.Fatal(err)
+	}
+}
 
-	// The earlier compaction, eight minutes ago: inside boundary_window (10m).
+// The second compaction's boundary is missing at ingest, so the row stays empty
+// and one fill is armed. Once the boundary lands, the first retry fills it.
+func TestCompactRoundTripStaleThenFilled(t *testing.T) {
+	fills := isolateCompactEnv(t)
+	dbPath, db := openCompactDB(t)
+
+	// The earlier compaction, eight minutes ago. It predates this PreCompact.
 	earlier := time.Now().Add(-8 * time.Minute).UTC().Format(time.RFC3339Nano)
 	transcript := writeTranscript(t, claudeAssistantLineFixture, fmt.Sprintf(claudeBoundaryLineFmt, earlier, m1dOldPre, m1dOldPost))
 
-	// Claude flushes the new boundary during the first wait poll.
-	fakeCompactClock(t, start, func(call int) {
-		if call == 1 {
-			stamp := time.Now().UTC().Format(time.RFC3339Nano)
-			appendTranscriptLine(t, transcript, fmt.Sprintf(claudeBoundaryLineFmt, stamp, m1dPreTokens, m1dPostTokens))
-		}
-	})
+	processWire(t, db, m1dPreCompactRaw(transcript))
+	processWire(t, db, m1dPostCompactRaw(transcript))
 
-	prepared, err := PrepareCodexTelemetry(m1dPreCompactRaw(transcript))
-	if err != nil {
-		t.Fatal(err)
+	ingest := lastNote(t, dbPath)
+	if ingest.Reason != reasonStaleBoundary {
+		t.Errorf("ingest note reason = %q, want %q (hook %+v)", ingest.Reason, reasonStaleBoundary, ingest.Hook)
 	}
-	if err := ProcessCodexTelemetryTx(db, wireRecord(t, prepared)); err != nil {
-		t.Fatal(err)
+	if ingest.Hook == nil || !slices.Contains(ingest.Hook.Keys, "compact_summary") {
+		t.Errorf("hook keys %+v, want compact_summary among them", ingest.Hook)
 	}
-
-	prepared, err = PrepareCodexTelemetry(m1dPostCompactRaw(transcript))
-	if err != nil {
-		t.Fatal(err)
+	if ingest.PreCompactAt == nil || ingest.BoundaryAt == nil {
+		t.Fatalf("ingest note carries no precompact_at/boundary_at: %+v", ingest)
 	}
-	if err := ProcessCodexTelemetryTx(db, wireRecord(t, prepared)); err != nil {
-		t.Fatal(err)
+	if ingest.BoundaryAt.After(*ingest.PreCompactAt) {
+		t.Errorf("stale boundary_at %v is after precompact_at %v", ingest.BoundaryAt, ingest.PreCompactAt)
 	}
-
-	notes := compactDiagNotes(t, dbPath)
-	last := notes[len(notes)-1]
-	if last.Reason != reasonApplied {
-		t.Errorf("note reason = %q, want %q (hook %+v)", last.Reason, reasonApplied, last.Hook)
+	if total, _ := postcompactRow(t, dbPath, m1dSessionID); total.Valid {
+		t.Fatal("postcompact row filled from a boundary older than its PreCompact")
 	}
-	if last.Hook == nil || !slices.Contains(last.Hook.Keys, "compact_summary") {
-		t.Errorf("hook keys %+v, want compact_summary among them", last.Hook)
-	}
-	if last.PreCompactAt == nil || last.BoundaryAt == nil {
-		t.Fatalf("note carries no precompact_at/boundary_at: %+v", last)
-	}
-	if !last.BoundaryAt.After(*last.PreCompactAt) {
-		t.Errorf("boundary_at %v is not after precompact_at %v", last.BoundaryAt, last.PreCompactAt)
+	if len(fills.armed) != 1 {
+		t.Fatalf("armed fills %v, want one retry", fills.armed)
 	}
 
-	rawDB, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatal(err)
+	// Claude writes the new boundary after PostCompact returned.
+	stamp := time.Now().UTC().Format(time.RFC3339Nano)
+	appendTranscriptLine(t, transcript, fmt.Sprintf(claudeBoundaryLineFmt, stamp, m1dPreTokens, m1dPostTokens))
+	if !fills.fireNext() {
+		t.Fatal("no fill timer armed")
 	}
-	defer rawDB.Close()
-	var total sql.NullInt64
-	var model string
-	if err := rawDB.QueryRow(`SELECT total_tokens, model FROM compaction_events WHERE session_id = ? AND event_type = 'postcompact' ORDER BY id DESC LIMIT 1`, m1dSessionID).Scan(&total, &model); err != nil {
-		t.Fatalf("postcompact row: %v", err)
+
+	filled := lastNote(t, dbPath)
+	if filled.Reason != reasonApplied || filled.FilledAfter != "retry:1" {
+		t.Errorf("fill note reason %q filled_after %q, want %q retry:1", filled.Reason, filled.FilledAfter, reasonApplied)
 	}
+	if filled.Hook == nil || !slices.Contains(filled.Hook.Keys, "compact_summary") {
+		t.Errorf("fill note hook keys %+v, want compact_summary among them", filled.Hook)
+	}
+	if filled.PreCompactAt == nil || filled.BoundaryAt == nil {
+		t.Fatalf("fill note carries no precompact_at/boundary_at: %+v", filled)
+	}
+	if !filled.BoundaryAt.After(*filled.PreCompactAt) {
+		t.Errorf("boundary_at %v is not after precompact_at %v", filled.BoundaryAt, filled.PreCompactAt)
+	}
+
+	total, model := postcompactRow(t, dbPath, m1dSessionID)
 	if !total.Valid || total.Int64 != m1dPostTokens {
 		t.Errorf("postcompact total_tokens = %v, want %d", total, m1dPostTokens)
 	}

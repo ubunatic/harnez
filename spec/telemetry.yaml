@@ -247,6 +247,7 @@ statements:
   compaction_events_add_source: "ALTER TABLE compaction_events ADD COLUMN source TEXT NOT NULL DEFAULT 'hook'"
   insert_compaction_event: "INSERT INTO compaction_events (created_at, session_id, event_type, turn_id, trigger, reason, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, model, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   insert_session_boundary: "INSERT INTO session_boundaries (created_at, session_id, boundary_type, compaction_event_id) VALUES (?, ?, ?, ?)"
+  fill_compaction_event: "UPDATE compaction_events SET input_tokens = ?, total_tokens = ?, model = ? WHERE id = ? AND event_type = 'postcompact' AND total_tokens IS NULL"
   insert_token_snapshot: "INSERT INTO token_snapshots (created_at, session_id, source, boundary_id, input_tokens, cached_input_tokens, uncached_input_tokens, output_tokens, reasoning_tokens, total_tokens, last_input_tokens, last_cached_input_tokens, last_output_tokens, last_reasoning_tokens, last_total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   insert_tool_call: |
     INSERT INTO tool_calls (created_at, session_id, ticket_id, project_name, working_dir, agent_id, tool_name, call_type, score, note, exit_code, duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, potential_savings_tokens, potential_savings_bytes, skill_name)

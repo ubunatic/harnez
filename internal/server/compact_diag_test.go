@@ -15,8 +15,8 @@ import (
 
 // Issue 1303 M1c: each Claude PostCompact writes one diagnostic note beside the
 // telemetry DB. The note records the outcome reason and the payload key names
-// only. These tests use scratch dirs and a faked wait clock, so they never
-// sleep and never reach the live collector.
+// only. These tests use scratch dirs and a fake fill timer, so they never sleep
+// and never reach the live collector.
 
 const (
 	diagSummarySentinel      = "DIAG-SUMMARY-SENTINEL-7f3a"
@@ -25,9 +25,10 @@ const (
 )
 
 // isolateCompactEnv points HOME and every XDG base at a temp dir, clears the
-// inherited broker FD, and asserts that the telemetry socket stays inside that
-// dir. A scratch HOME alone does not isolate hook telemetry (issue 1303 M1b).
-func isolateCompactEnv(t *testing.T) {
+// inherited broker FD, asserts that the telemetry socket stays inside that dir,
+// and replaces the fill timer with a fake (issue 1303 M1b, M1e). A scratch HOME
+// alone does not isolate hook telemetry (issue 1303 M1b).
+func isolateCompactEnv(t *testing.T) *fakeFills {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("HOME", root)
@@ -50,6 +51,7 @@ func isolateCompactEnv(t *testing.T) {
 	if !strings.HasPrefix(sock, root) {
 		t.Fatalf("telemetry socket %q is outside the scratch root %q", sock, root)
 	}
+	return installFakeFills(t)
 }
 
 func claudePreCompactRaw(path string) []byte {
@@ -98,8 +100,9 @@ func processPrepared(t *testing.T, db *telemetry.DB, raw []byte) {
 	}
 }
 
-// The hook side reports why its transcript read did or did not produce a
-// boundary. Each reason is checked where the hook decides it.
+// The hook side reports why its one transcript read did or did not produce a
+// boundary. It never judges whether the boundary is this compaction's: the
+// collector does that against the PreCompact row (issue 1303 M1e).
 func TestCompactDiagClientReasons(t *testing.T) {
 	isolateCompactEnv(t)
 	start := time.Now().UTC()
@@ -113,10 +116,10 @@ func TestCompactDiagClientReasons(t *testing.T) {
 		{"no_boundary", func(t *testing.T) string {
 			return writeTranscript(t, claudeAssistantLineFixture)
 		}, reasonNoBoundary},
-		{"stale_boundary", func(t *testing.T) string {
+		{"old_boundary_left_to_collector", func(t *testing.T) string {
 			old := start.Add(-2 * time.Hour).Format(time.RFC3339Nano)
 			return writeTranscript(t, claudeAssistantLineFixture, fmt.Sprintf(claudeBoundaryLineFmt, old, 900, 90))
-		}, reasonStaleBoundary},
+		}, ""},
 		{"boundary_found", func(t *testing.T) string {
 			now := start.Format(time.RFC3339Nano)
 			return writeTranscript(t, claudeAssistantLineFixture, fmt.Sprintf(claudeBoundaryLineFmt, now, 500, 50))
@@ -124,7 +127,6 @@ func TestCompactDiagClientReasons(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeCompactClock(t, start, nil)
 			path := tc.setup(t)
 			prepared, err := PrepareCodexTelemetry(claudePostCompactRaw(path, true))
 			if err != nil {
@@ -151,97 +153,80 @@ func TestCompactDiagClientReasons(t *testing.T) {
 }
 
 // The collector writes one note per PostCompact. Its reason is the hook's reason
-// when the hook found none, and otherwise the DB-side outcome.
+// when the hook found none, and otherwise the DB-side outcome. A stale or missing
+// boundary arms a fill; an applied or unmatched one does not.
 func TestCompactDiagCollectorReasons(t *testing.T) {
-	// stale_boundary_collector drops the PreCompact mark (issue 1303 M1d), so the
-	// hook takes the boundary by its window and the collector's own check decides.
 	cases := []struct {
 		name       string
 		precompact bool
-		dropMark   bool
 		boundaryAt func(preAt time.Time) time.Time
-		hookReason string
 		reason     string
+		armed      bool
 	}{
-		{"no_precompact", false, false, nil, "", reasonNoPrecompact},
-		{"stale_boundary_hook", true, false, func(pre time.Time) time.Time { return pre.Add(-time.Second) }, reasonStaleBoundary, reasonStaleBoundary},
-		{"stale_boundary_collector", true, true, func(pre time.Time) time.Time { return pre.Add(-time.Second) }, "", reasonStaleBoundary},
-		{"applied", true, false, func(pre time.Time) time.Time { return pre.Add(time.Second) }, "", reasonApplied},
+		{"no_precompact", false, func(time.Time) time.Time { return time.Now().UTC() }, reasonNoPrecompact, false},
+		{"stale_boundary", true, func(pre time.Time) time.Time { return pre.Add(-time.Second) }, reasonStaleBoundary, true},
+		{"applied", true, func(pre time.Time) time.Time { return pre.Add(time.Second) }, reasonApplied, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			isolateCompactEnv(t)
-			start := time.Now().UTC()
-			fakeCompactClock(t, start, nil)
-			dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
-			db, err := telemetry.Open(dbPath)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { db.Close() })
-
+			fills := isolateCompactEnv(t)
+			dbPath, db := openCompactDB(t)
 			transcript := writeTranscript(t, claudeAssistantLineFixture)
-			boundaryAt := start
+			preAt := time.Now().UTC()
 			if tc.precompact {
 				processPrepared(t, db, claudePreCompactRaw(transcript))
-				if tc.dropMark {
-					markPath, err := claudeCompactMarkPath(diagSessionID)
-					if err != nil {
-						t.Fatal(err)
-					}
-					if err := os.Remove(markPath); err != nil {
-						t.Fatalf("remove PreCompact mark: %v", err)
-					}
-				}
-				preAt, ok, err := db.LatestCompactionEventTime(diagSessionID, "precompact")
+				var ok bool
+				var err error
+				preAt, ok, err = db.LatestCompactionEventTime(diagSessionID, "precompact")
 				if err != nil || !ok {
 					t.Fatalf("precompact row: ok=%v err=%v", ok, err)
 				}
-				boundaryAt = tc.boundaryAt(preAt)
 			}
+			boundaryAt := tc.boundaryAt(preAt)
 			appendTranscriptLine(t, transcript, fmt.Sprintf(claudeBoundaryLineFmt, boundaryAt.Format(time.RFC3339Nano), 500, 50))
 			processPrepared(t, db, claudePostCompactRaw(transcript, true))
 
-			notes := compactDiagNotes(t, dbPath)
-			if len(notes) == 0 {
-				t.Fatal("PostCompact wrote no note")
-			}
-			last := notes[len(notes)-1]
+			last := lastNote(t, dbPath)
 			if last.Kind != "postcompact" || last.Reason != tc.reason {
 				t.Errorf("note kind %q reason %q, want postcompact %q", last.Kind, last.Reason, tc.reason)
 			}
-			if last.Hook == nil || last.Hook.Reason != tc.hookReason {
-				t.Errorf("hook reason = %+v, want %q", last.Hook, tc.hookReason)
+			if last.Hook == nil || last.Hook.Reason != "" {
+				t.Errorf("hook reason = %+v, want none: the hook found a boundary", last.Hook)
 			}
 			if last.CollectorPID != os.Getpid() {
 				t.Errorf("collector_pid = %d, want %d", last.CollectorPID, os.Getpid())
+			}
+			if (last.PreCompactAt != nil) != tc.precompact {
+				t.Errorf("precompact_at = %v, want set=%v", last.PreCompactAt, tc.precompact)
+			}
+			if last.BoundaryAt == nil {
+				t.Errorf("boundary_at is empty; the boundary was read")
+			}
+			if armed := len(fills.armed) > 0; armed != tc.armed {
+				t.Errorf("fill armed = %v, want %v (armed %v)", armed, tc.armed, fills.armed)
 			}
 		})
 	}
 }
 
 // When the hook found no boundary, its reason is the note's reason, and the
-// collector does not overwrite it.
+// collector does not overwrite it. The fill is still armed, because Claude writes
+// the boundary after PostCompact returns (issue 1303 M1e).
 func TestCompactDiagHookReasonWinsOverCollector(t *testing.T) {
-	isolateCompactEnv(t)
-	start := time.Now().UTC()
-	fakeCompactClock(t, start, nil)
-	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
+	fills := isolateCompactEnv(t)
+	dbPath, db := openCompactDB(t)
 	processPrepared(t, db, claudePreCompactRaw(writeTranscript(t, claudeAssistantLineFixture)))
 	processPrepared(t, db, claudePostCompactRaw(writeTranscript(t, claudeAssistantLineFixture), true))
 
-	notes := compactDiagNotes(t, dbPath)
-	last := notes[len(notes)-1]
+	last := lastNote(t, dbPath)
 	if last.Reason != reasonNoBoundary {
 		t.Errorf("note reason = %q, want %q", last.Reason, reasonNoBoundary)
 	}
 	if last.Hook == nil || last.Hook.Reason != reasonNoBoundary {
 		t.Errorf("hook reason = %+v, want %q", last.Hook, reasonNoBoundary)
+	}
+	if len(fills.armed) != 1 {
+		t.Errorf("armed fills %v, want one retry", fills.armed)
 	}
 }
 
@@ -250,13 +235,7 @@ func TestCompactDiagHookReasonWinsOverCollector(t *testing.T) {
 func TestCompactDiagNoteNeverHoldsPayloadValues(t *testing.T) {
 	isolateCompactEnv(t)
 	start := time.Now().UTC()
-	fakeCompactClock(t, start, nil)
-	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
-	db, err := telemetry.Open(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
+	dbPath, db := openCompactDB(t)
 	transcript := writeTranscript(t, claudeAssistantLineFixture, fmt.Sprintf(claudeBoundaryLineFmt, start.Format(time.RFC3339Nano), 500, 50))
 	raw := []byte(fmt.Sprintf(`{"session_id":%q,"transcript_path":%q,"hook_event_name":"PostCompact","trigger":"manual","compact_summary":%q,"custom_instructions":%q}`,
 		diagSessionID, transcript, diagSummarySentinel, diagInstructionsSentinel))
@@ -271,8 +250,7 @@ func TestCompactDiagNoteNeverHoldsPayloadValues(t *testing.T) {
 			t.Errorf("diagnostic note holds payload value %s", sentinel)
 		}
 	}
-	notes := compactDiagNotes(t, dbPath)
-	if last := notes[len(notes)-1]; last.Hook == nil || !slices.Contains(last.Hook.Keys, "custom_instructions") {
+	if last := lastNote(t, dbPath); last.Hook == nil || !slices.Contains(last.Hook.Keys, "custom_instructions") {
 		t.Errorf("hook keys %+v, want custom_instructions recorded as a name", last.Hook)
 	}
 }

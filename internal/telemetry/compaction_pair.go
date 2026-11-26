@@ -88,3 +88,18 @@ func (d *DB) LatestCompactionEventTime(sessionID, eventType string) (time.Time, 
 	}
 	return at, true, nil
 }
+
+// FillCompactionEvent sets the post-compaction tokens and model of one postcompact
+// row that has none yet (issue 1303 M1e). It reports whether a row was updated, so
+// a repeated fill of the same row writes nothing.
+func (d *DB) FillCompactionEvent(id, tokens int64, model string) (bool, error) {
+	res, err := d.executor().Exec(mustTelemetrySQL().Statements["fill_compaction_event"], tokens, tokens, model, id)
+	if err != nil {
+		return false, fmt.Errorf("telemetry: fill compaction event: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("telemetry: fill compaction event rows: %w", err)
+	}
+	return n > 0, nil
+}

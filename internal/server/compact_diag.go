@@ -61,8 +61,11 @@ type compactDiagNote struct {
 	Reason    string    `json:"reason"`
 	// PreCompactAt is the newest PreCompact row's time; BoundaryAt is the boundary's
 	// timestamp. Both are timestamps only, never content (issue 1303 M1d).
-	PreCompactAt *time.Time   `json:"precompact_at,omitempty"`
-	BoundaryAt   *time.Time   `json:"boundary_at,omitempty"`
+	PreCompactAt *time.Time `json:"precompact_at,omitempty"`
+	BoundaryAt   *time.Time `json:"boundary_at,omitempty"`
+	// FilledAfter is set on an applied fill (issue 1303 M1e): "retry:N" for the
+	// Nth scheduled re-read, or "event" for the next session event.
+	FilledAfter  string       `json:"filled_after,omitempty"`
 	Hook         *compactDiag `json:"hook,omitempty"`
 	CollectorPID int          `json:"collector_pid"`
 }

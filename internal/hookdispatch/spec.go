@@ -18,59 +18,41 @@ type Spec struct {
 }
 
 type claudeCompactRaw struct {
-	BoundaryWindow string `yaml:"boundary_window"`
-	BoundaryWait   string `yaml:"boundary_wait"`
-	BoundaryPoll   string `yaml:"boundary_poll"`
+	FillRetry []string `yaml:"fill_retry"`
 }
 
-// ClaudeCompactWait is the parsed claude_compact section of spec/hooks.yaml: how
-// long a PostCompact hook may look for Claude's compact boundary (issue 1303 M1b).
-type ClaudeCompactWait struct {
-	Window time.Duration
-	Wait   time.Duration
-	Poll   time.Duration
-}
-
-// LoadClaudeCompactWait returns the claude_compact bounds from the embedded spec.
-// There is no Go default: a missing or inconsistent value is an error.
-func LoadClaudeCompactWait() (ClaudeCompactWait, error) {
+// LoadClaudeCompactFillRetry returns the collector's fill schedule for Claude's
+// compact boundary: the pause after the PostCompact ingest before each re-read of
+// the transcript (issue 1303 M1e). There is no Go default: a missing or
+// non-positive value is an error.
+func LoadClaudeCompactFillRetry() ([]time.Duration, error) {
 	raw, err := harnez.DefaultFS.ReadFile("spec/hooks.yaml")
 	if err != nil {
-		return ClaudeCompactWait{}, fmt.Errorf("load hooks spec: %w", err)
+		return nil, fmt.Errorf("load hooks spec: %w", err)
 	}
-	return parseClaudeCompactWait(raw)
+	return parseClaudeCompactFillRetry(raw)
 }
 
-// parseClaudeCompactWait validates raw against the hooks schema and parses the
-// claude_compact durations. The wait must be at least one poll, or the loop never reads.
-func parseClaudeCompactWait(raw []byte) (ClaudeCompactWait, error) {
+// parseClaudeCompactFillRetry validates raw against the hooks schema and parses
+// each claude_compact.fill_retry delay. Every delay must be positive.
+func parseClaudeCompactFillRetry(raw []byte) ([]time.Duration, error) {
 	if err := validateSpec(raw); err != nil {
-		return ClaudeCompactWait{}, fmt.Errorf("hooks spec: %w", err)
+		return nil, fmt.Errorf("hooks spec: %w", err)
 	}
 	var s Spec
 	if err := yaml.Unmarshal(raw, &s); err != nil {
-		return ClaudeCompactWait{}, fmt.Errorf("parse hooks spec: %w", err)
+		return nil, fmt.Errorf("parse hooks spec: %w", err)
 	}
-	var out ClaudeCompactWait
-	for name, dst := range map[string]struct {
-		value string
-		out   *time.Duration
-	}{
-		"boundary_window": {s.ClaudeCompact.BoundaryWindow, &out.Window},
-		"boundary_wait":   {s.ClaudeCompact.BoundaryWait, &out.Wait},
-		"boundary_poll":   {s.ClaudeCompact.BoundaryPoll, &out.Poll},
-	} {
-		d, err := time.ParseDuration(dst.value)
+	out := make([]time.Duration, 0, len(s.ClaudeCompact.FillRetry))
+	for i, value := range s.ClaudeCompact.FillRetry {
+		d, err := time.ParseDuration(value)
 		if err != nil {
-			return ClaudeCompactWait{}, fmt.Errorf("hooks spec claude_compact.%s %q: %w", name, dst.value, err)
+			return nil, fmt.Errorf("hooks spec claude_compact.fill_retry[%d] %q: %w", i, value, err)
 		}
 		if d <= 0 {
-			return ClaudeCompactWait{}, fmt.Errorf("hooks spec claude_compact.%s must be positive, got %s", name, d)
+			return nil, fmt.Errorf("hooks spec claude_compact.fill_retry[%d] must be positive, got %s", i, d)
 		}
-		*dst.out = d
-	}
-	if out.Wait < out.Poll {
-		return ClaudeCompactWait{}, fmt.Errorf("hooks spec claude_compact.boundary_wait %s is shorter than boundary_poll %s", out.Wait, out.Poll)
+		out = append(out, d)
 	}
 	return out, nil
 }
