@@ -23,3 +23,4 @@ tickets: [1309]
   - the 5-hour pp not explained fell from 203 to 6;
   - the weekly-equivalent gap fell from 2.36 to 0.86 pp.
   It also found two follow-ups, now M2 pre-work: 2 `claude-opus-4-8` calls that have no price, and the d957448b cost gap. Green tests could not show either one.
+- Review (agy:neon:low, 1m31s, 133k tokens incl. cached): 1 high (since-filter claim order), 2 medium (subagent-only claim, ResolveCommands swallowing errors), 2 low (missing tests). All checked against the diff and moved to M2 pre-work. The host review had missed the claim-order bug.

@@ -130,7 +130,17 @@ Live check (host, 2026-11-27 16:16 UTC, weekly window), first without the overri
    - a model mix that is not all Haiku;
    - cache-write TTL pricing.
    Reason from the code. The host does the hand check against taia's `cost-state`, because helpers must not read taia's state dir.
-3. Findings from the agy:neon:low M1 review, added below once it reports.
+3. **Claim only in-range files.** Source: the agy:neon:low review, confirmed in the diff. `scan.go` sets `seenInDir[session]` before the `since` mtime filter. As a result, a stale copy in dir 1 claims the session and drops a newer in-range copy in dir 2.
+   - Fix: set the claim only after the file passes `since`.
+   - Test: a stale file in dir 1 and an in-range file in dir 2 with the same session id. The calls from dir 2 are counted.
+   - Host decision: the claim follows in-range files, and first-dir-wins still holds when both copies are in range.
+4. **ResolveCommands must not hide config errors.** `commands.go:41-45` swallows the `usage.ClaudeConfigDirs()` error, for example from a malformed local.yaml.
+   - Fix: return it, as the report, `CollectProjectUsage` and `session extract` do.
+   - Test: a malformed local.yaml gives an error.
+5. **Tests the review found missing:**
+   - `CLAUDE_CONFIG_DIR` precedence in `ResolveCommands`: the env dir wins over a list dir that holds the same session id.
+   - `Warnings` in `RenderText` (`note:` line) and `RenderJSON` (`warnings`).
+   - A subagent-only session in dir 1 (only `<session>/subagents/*.jsonl`, all in range) still claims the session. Pin this behaviour with a test, so it is intended rather than accidental.
 - `docs/Telemetry.md` (the report section) and the spec docs name the key and the override. The host runs the live acceptance below with the owner's override set.
 
 ## Acceptance (for A)
