@@ -154,6 +154,31 @@ the touched package, with the full run left to the host.
   Copyable-Doc Sources") and edit the source if so.
 - Leave the ticket open; the host runs the live acceptance canary and closes it.
 
+## M3 delivered (46d306db dry-run window, 3a52de28 docs)
+Dry-run prints `compact window: <n> (<source>, <mechanism>)` (host checked Claude flag, Claude threshold, Codex flag;
+argv matches). AutoCompaction.md "One threshold per model"; `legacy_growth_threshold_tokens` and `ShouldCompact`
+removed. One `make test-q1`, 83 ok. `harnez init -d .` clean.
+
+## Acceptance canary (host, 2026-11-27)
+`harnez agent start --role advisor --model haiku:med` in /tmp/m0-1305, same 20-read load, owner's real Claude
+settings, no caller env: peak context 65.7k, end context 34.5k (native compaction mid-turn), 0 requests over 100k.
+
+## M4 fixes from the final neon:low review (host verified each at the cited lines)
+1. HIGH `cmd/harnez/agent_run.go:1114-1124`: `runResume` saves `CompactTokens` before the refusal checks
+   (`ResumeBlockedReason`, quarantine, blocked model, Codex quota pending, `canManageTarget` lineage). A refused
+   resume, even from outside the caller's lineage, changes the stored value. Move the save after every refusal
+   check (just before the turn launches) and test that a refused resume (out-of-lineage and blocked) leaves
+   `compact_tokens` unchanged.
+2. MED `cmd/harnez/agent_run.go:1664-1665`: `agent compact` builds `subagent.Model{...}` without `CompactTokens`; use
+   `sessionModel(x)` for the driver and `Compact`. Test that the compact child gets the stored window.
+3. MED `cmd/harnez/agent_cmds.go:413-426`: `resume -i` returns before the flag is parsed, so `resume -i --autocompact`
+   silently ignores it and the guard is dead. Parse and reject before the interactive branch; test it.
+4. LOW `cmd/harnez/agent_run.go:1074-1078`: `resume --dry-run --autocompact` skips `checkAutocompactProvider`; check
+   it there too.
+5. MED `docs/AutoCompaction.md:30-31`: Codex row says harnez's check is "Primary"; it is the backstop (Codex's own
+   `-c` limit is primary). Pi/lmcoder row: name the pre-turn RPC compact and `pi_compaction` settings instead of
+   "unverified" if the code shows it (it did per the Strategy table).
+
 ## Acceptance
 - Live Haiku canary with the owner's settings at 200k: a harnez agent with threshold 100k shows 0 requests over 100k.
 - `--autocompact 120k` on a Claude agent: the child env carries 120000 and the watchdog fires at 120k (unit test);
