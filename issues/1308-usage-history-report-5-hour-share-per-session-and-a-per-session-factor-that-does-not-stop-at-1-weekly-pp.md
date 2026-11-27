@@ -51,6 +51,17 @@ Paired Claude 5-hour and weekly samples from 2026-11-21 11:00 UTC, split at 5-ho
 
 **M0 verdict (host decision):** precise enough. M2 converts with the **range ratio** = Σ 5-hour rise ÷ Σ weekly rise over the 5-hour windows in range whose weekly rise is at least `usage_report.min_ratio_weekly_pct` (new spec key, start 4), never per window (too noisy at 1-4 weekly pp). Print the ratio and the window count used. Start `min_session_five_hour_pct` at 1 (one 5-hour step). The solo-interval count is measured after M1 on the installed binary.
 
+### Plan turn (dev-1308, 1m9s, peak 64.6k) and host decisions
+Plan accepted: parameterise the window selector (`isClaudeWeekly`, `windowStart`, `weeklyGroups`, `buildTimeline`) instead of copying; M1 and M2 as one commit each.
+
+**Pre-Work / Required Refinements for M1-M2 (host decisions, decide mode):**
+1. **Weekly delta per 5-hour window** = weekly value at this window's last sample minus the weekly value at the previous window's last sample (contiguous partition, the same monotone/flicker handling as the weekly path). The per-window deltas then sum to the range's weekly rise; test that.
+2. **Capped windows count in the ratio.** At 100 % Claude refuses further calls, so no usage is hidden; the 5-hour rise there is exact. No lower-bound flag.
+3. **Quiet check on 5-hour rises** uses weekly-equivalent pp (5-hour pp ÷ ratio) against `min_local_factor`. When the ratio is n/a, the 5-hour quiet check is off and the output says so; rises are not marked quiet by default.
+4. **Sessions with ≥ 1 weekly pp** keep the weekly factor and show the 5-hour factor beside it.
+5. **Acceptance restated:** Σ weekly-equivalent pp vs attributed weekly pp is a reported gap (print both and the difference), not an identity.
+6. M0 is re-measured on the installed binary after M2 with the code's definition; the host records it.
+
 ### M1 — 5-hour share per session (Q2)
 - Run the same interval attribution on the Claude 5-hour window: resets every 5 hours are expected, not errors. Reuse the weekly code path; do not copy it.
 - Per session: `QUOTA 5H %` (sum of 5-hour pp) next to the weekly `QUOTA %`; JSON field next to `quota_pct`. Totals: 5-hour rise, attributed, not explained locally, per the same rules as the weekly window (quiet rises, before first sample, pending).
