@@ -12,7 +12,7 @@ Each fact is marked **measured** (owner or canary run, with version), **docs** (
 
 - **harnez:** `compact_threshold_tokens` in `spec/agent.yaml` defaults to 200000; spec `compact_thresholds` defaults Haiku to 100000. User `agent.compact_thresholds` overrides model-specific defaults, which take precedence over the user global threshold (`internal/subagent/compact.go`). Before each prompt,
   `harnez agent` compares the last turn's input tokens with it and sends `/compact` (591); the stream watchdog stops
-  a turn that grows past it (592). Absolute tokens only, no percent yet (969).
+  a turn that grows past it (592). Since 1264 the watchdog covers every Claude turn (streaming, `--json`, detached): it kills the process group at the crossing, meters the finished calls and stores the token count so the next resume compacts first. Absolute tokens only, no percent yet (969).
 - `auto_compact` in `spec/agent.yaml` selects manual, native, or disabled routing by provider: Claude uses manual,
   Codex uses native, and agy is disabled until reliable context counts are available (644, 869). The same spec sets
   the watchdog's shutdown grace and the legacy growth-telemetry threshold. Turn-end `[done: ...]` output also
