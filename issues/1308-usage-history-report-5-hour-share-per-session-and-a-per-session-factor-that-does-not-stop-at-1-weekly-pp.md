@@ -1,6 +1,6 @@
 # 1308 — usage history report: 5-hour share per session and a per-session factor that does not stop at 1 weekly pp
 
-**Status**: In Progress — review triaged, M3 next
+**Status**: In Progress — M3 delivered, acceptance passed, legend wording (M3b) left
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -98,6 +98,21 @@ Plan accepted: parameterise the window selector (`isClaudeWeekly`, `windowStart`
 6. **Host decision, no code:** range-edge windows. The ratio uses whole 5-hour windows whose last sample lies in Since..Until. A window across `Since` brings its pre-`Since` pp into the ratio, and the open window after `Until` is left out. That is fine for a conversion rate (whole windows, never cut); M3 documents it in Telemetry.md.
 7. **M3 docs:** extend `docs/Telemetry.md` "Claude Range Report" (line 259; root evergreen, not a copy). Cover the `QUOTA 5H %`, `5H W-EQ %` and `5H FACTOR` columns; measured/split; the range ratio and its window rule (item 6); `min_ratio_weekly_pct` and `min_session_five_hour_pct`; the 5-hour quiet check via weekly-eq pp; the model rows (factor from solo rises only); the reported gap between Σ weekly-eq and weekly attributed. Numbers in docs only as an example marked with a date.
 8. One `make test-q1`, then `make install`. The host runs the live acceptance and closes the ticket.
+
+### M3 delivered: reset-span fix, tests, Telemetry.md (475cbff6, 47df949a)
+- `riseBetween` sums the weekly rise across groups (the old group up to its last peak, then each new group from its first reading); a late first weekly sample uses the group's first reading. New tests: reset inside one 5-hour window (3 → 5), late first sample, factor gate at exactly 1 pp and below, end-to-end split basis with a shared-only model. Host rerun of the package: all 20 5-hour/basis tests pass. The capped-window ratio test (review item 5) was not added; decision 2 is documented instead.
+- **Live acceptance (host, installed binary, 2026-11-27 ~16:30 CET):**
+  - `--window weekly` and `--since 7d` give the same output: history starts at the weekly reset (11-21 11:00 UTC), so 7d holds no older samples.
+  - Weekly invariants: buckets $79.568006 + quiet $0.008888 + before first sample $0.039859 + pending $0.231701 = API $79.848454 (exact); 43 attributed + 14 not explained = 57 rise.
+  - 5-hour invariants: Σ session shares 485 + not explained 203 = 688 pp (exact), over 315 rises.
+  - Range ratio **11.98** from 9 windows (M0 12.5). Σ weekly-eq **40.48 pp vs 43 pp** weekly attributed: gap −2.52 pp (−5.9 %).
+  - **58 of 126 sessions** have a 5-hour factor (22 measured, 36 split); 5 have a weekly factor.
+  - Models (solo rises only): Haiku 24.6x (96 solo rises, 20.0 weekly-eq pp); Opus 74.7x (52 solo rises, 20.5 pp); Sonnet n/a (no solo rise).
+  - Hand check, measured: the session with the largest measured share has 32.68 5-hour pp, ÷ 11.98 = 2.727 weekly-eq pp, plan $0.1032; API $3.0998 ⇒ 30.03x, exactly as reported. Its weekly factor is 47.5x on 1.72 weekly pp (1-pp steps).
+  - Hand check, split: the host session has 164.87 5-hour pp ⇒ 13.76 weekly-eq pp. The reported 82.4x uses the cost of its calls inside attributed 5-hour rises (about $42.9), not its API $44.63 (which would give 85.7x). Its weekly factor is 53.3x on 22.0 pp. Split factors carry the cost-split error; measured ones are the ones to trust.
+
+**Pre-Work for M3b (last turn):**
+1. LOW, wording: the legend (render.go:69) and docs/Telemetry.md:321 say `5H FACTOR = API $ / plan net`, but the code (fiveh.go:288) uses the cost of the session's calls in attributed 5-hour rises. Say that in both places. No code change.
 
 ### M1 — 5-hour share per session (Q2)
 - Run the same interval attribution on the Claude 5-hour window: resets every 5 hours are expected, not errors. Reuse the weekly code path; do not copy it.

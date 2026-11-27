@@ -39,3 +39,6 @@ tickets: [1308, 1300]
   weekly group's rise is dropped when a 5-hour window spans the reset (real, matters for `--since 7d`); a first
   window without a weekly baseline; threshold, split-basis and capped-ratio tests missing; two stale comments. It
   also flagged range-edge windows: decided as intended (whole windows) and documented. All of it is M3 pre-work.
+- Turn 5 (M3 475cbff6 + 47df949a, 3m39s, one `make test-q1`): reset-span and late-sample fixes, the missing tests,
+  Telemetry.md. Live acceptance passed: ratio 11.98 (9 windows), gap −2.5 pp, 58/126 sessions with a factor, all
+  invariants exact. The hand check found the legend's "API $" is really the cost in attributed 5-hour rises: M3b.
