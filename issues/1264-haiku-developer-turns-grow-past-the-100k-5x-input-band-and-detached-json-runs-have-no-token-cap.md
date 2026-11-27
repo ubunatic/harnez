@@ -111,3 +111,10 @@ Decision (host): non-JSON Claude prompts now get `withProtocol(...)` (dispatch p
 5. **LOW (M1):** `agent_run.go:1340-1350`, a stale-resume fallback that is then stopped keeps the old provider id; store `observedSessionID`.
 6. **LOW:** a JSON resume stop test (one document, status `stopped`, non-zero).
 7. **M3 scope (unchanged):** docs `docs/AutoCompaction.md:13-15`, `:42-43` (stale 80k), `docs/HarnezAgentArchitecture.md` (watchdog on every Claude turn, stopped JSON document, `peak_context_tokens`, the `withProtocol` CONFIRM line on Claude prompts). Then the host reruns the canary in both modes.
+
+## M3 delivered (284967aa), docs gap
+
+- Pre-work 1-6 done: detached start and resume workers keep `stopped` for a watchdog stop (typed `watchdogStopError`), a JSON start stop without a provider id prints the document and reads the quota, session totals and quota `== 2` asserted, peak above the last call tested, repeated-id partial parse, the stale-resume stop stores the observed id, a JSON resume stop test. Developer q1: 83 ok, 0 FAIL. Host: touched packages green, installed, pushed.
+- **Docs gap (item 7, open):** only the 80k → 100k numbers changed. Still missing:
+  - `docs/AutoCompaction.md:13-15`: the watchdog covers every Claude turn (streaming, `--json`, detached) since 1264, kills the process group at the crossing, meters the finished calls and stores the count so the next resume compacts first.
+  - `docs/HarnezAgentArchitecture.md` §4.1: the same, plus the stopped `--json` document (status `stopped`, non-zero exit, message on stderr), `peak_context_tokens` (turn record, JSON, `[done:]`: the largest main-chain prompt; `context_tokens` is the last call and can hide the peak), and the `CONFIRM:` first line (`withProtocol`) now on Claude prompts.
