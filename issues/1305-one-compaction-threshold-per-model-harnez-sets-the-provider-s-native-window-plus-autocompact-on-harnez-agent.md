@@ -53,6 +53,41 @@ harnez thresholds, the token watchdog) and no clear strategy.
 - **M3:** docs/AutoCompaction.md rewritten around the table above (one threshold, primary vs backstop per provider);
   remove `legacy_growth_threshold_tokens` with its telemetry callers if nothing else reads it; man page/help updated.
 
+## M0 delivered (dev-1305, claude -p 2.1.330, Haiku 5.5, 2026-11-27)
+Load: 10,000 lines read in 20 `harnez read` ranges, 21 requests per run; temp `--settings` file with
+`autoCompactWindow: 200000` in every run; real settings untouched. Spend about $0.26.
+
+| Run | env `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | Peak prompt | Requests > 100k | Compactions (pre-compact) |
+|---|---|---|---|---|
+| control | unset | 164.3k | 9 | none |
+| A | 80000 | 64.7k | 0 | 3 (65.9k, 65.8k, 68.4k) |
+| B | 100000 | 65.5k | 0 | 3 (65.8k, 66.0k, 69.1k) |
+
+- Env beats settings: confirmed for this pair.
+- 80000 and 100000 behave the same: a clamp to a 100k floor, or ignored below it (unverified).
+- Trigger is about 66k for a 100k window, not 100k. This conflicts with the 1264 canaries, which used the
+  *settings* key at 100k and saw compaction at 96-106k. Either env and settings differ in meaning, or Claude
+  reserves about 33k below the window.
+
+## M0b pre-work (before M1): three more canary runs, same load and method
+1. env 150000, settings 200k: compaction near 117k means a reserve formula (window minus about 33k); near 150k
+   means the env is the trigger itself.
+2. env 60000, settings 200k: compaction near 66k means a 100k floor; near 27k or none means another rule.
+3. no env, settings file `autoCompactWindow: 100000`: compaction near 100k means settings and env differ in meaning;
+   near 66k means the 1264 numbers came from another cause.
+Add the rows to the M0 table; report the reserve (or none) with numbers.
+
+## Decision (host, decide mode, after M0)
+- M0b runs before M1 (about $0.2 more): the mapping from threshold to env value depends on it. Inside M0's purpose.
+- Default mapping until M0b says otherwise: harnez sets the env to the threshold itself. Claude may then compact
+  earlier than the threshold (about 66k for 100k), never later. That keeps "0 requests over threshold" and is
+  predictable. Adding a measured reserve on top (env = threshold + reserve) is not done in this ticket: it would hard-code
+  an undocumented Claude internal. If M0b shows a clean reserve, record it here and the docs (M3) state it.
+- Thresholds under 100k (Claude floor if M0b confirms it): set the env anyway; Claude clamps, and the pre-turn
+  `/compact` plus the watchdog enforce the lower harnez value. No error, one `--debug`-level note is enough.
+- Milestones stay as written: M1 env from the threshold (no flag yet), M2 the flag. The developer's plan merged them;
+  splitting keeps each diff small for review.
+
 ## Acceptance
 - Live Haiku canary with the owner's settings at 200k: a harnez agent with threshold 100k shows 0 requests over 100k.
 - `--autocompact 120k` on a Claude agent: the child env carries 120000 and the watchdog fires at 120k (unit test);
