@@ -312,6 +312,47 @@ factor is its API cost over its quota share times the weekly plan. `SAMPLES`
 counts attributed rises with a share in that hour. A sparkline shows the factor
 of each attributed rise. `--json` carries `hours`, `series` and `window`.
 
+### 5-hour window and weekly-equivalent share (issue 1308)
+
+The report also reads Claude's 5-hour window (`Session (5-hour)`) with the same
+rules: rises grouped by `reset_at`, interval attribution, quiet rises and not
+explained. A 5-hour reset every five hours is expected, not an error. Text
+columns: `QUOTA 5H %` is the session's attributed 5-hour pp; `5H W-EQ %` is its
+weekly-equivalent pp (5-hour pp divided by the range ratio); `5H FACTOR` is its
+API cost over the plan net of the W-EQ %. The JSON carries the same values as
+`five_hour_*` fields on sessions and the totals.
+
+Range ratio: Σ 5-hour pp ÷ Σ weekly pp over the 5-hour windows in range whose
+weekly rise is at least `usage_report.min_ratio_weekly_pct` (spec default 4).
+A window's weekly rise is the weekly rise between the previous 5-hour boundary and
+its last sample, so a weekly reset inside a window counts the old group's rise up
+to the reset and the new group's rise from its first reading. The windows add up
+to the weekly `rise_pct` of the range. The ratio is a conversion rate over whole
+windows, never cut: a window that starts before `--since` brings its pre-`--since`
+pp into the ratio, and the open window after `--until` is left out. The text
+prints the ratio used and the gap between the weekly-equivalent total and the
+weekly attributed pp. Without a qualifying window there is no ratio, and the
+W-EQ and 5H FACTOR columns are `n/a` with the reason in the summary line.
+
+Quiet check: a 5-hour rise is quiet when its local API cost over its
+weekly-equivalent plan cost is below `usage_report.min_local_factor`; it gets no
+share. Without a ratio there is no 5-hour quiet check.
+
+Factor gate: a session gets a 5-hour factor when its 5-hour share is at least
+`usage_report.min_session_five_hour_pct` (spec default 1 pp, one quota step).
+Below it the factor is `n/a (< N pp)`; at exactly N pp it is shown.
+
+Basis: a factor is `measured` when at least half of the session's share comes
+from rises where it was the only session with calls, and `split` otherwise. The
+weekly `FACTOR` gets the same basis. The legend line explains both.
+
+Model rows (`models in range`): API $, attributed $, 5-hour pp, W-EQ pp, plan net,
+the number of solo rises and the factor. A model's factor uses only its solo
+rises (rises where it was the only model with calls), so a model that only shares
+rises has no factor. Compare Haiku and Opus on solo rises only.
+
+Acceptance numbers on live data are not written here; they go with the ticket.
+
 ## Compaction Quota Sample (issue 1303 M2)
 
 Each Claude PostCompact the collector stores also gets one quota sample: a
