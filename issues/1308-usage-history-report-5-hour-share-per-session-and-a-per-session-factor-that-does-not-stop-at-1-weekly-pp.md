@@ -1,6 +1,6 @@
 # 1308 — usage history report: 5-hour share per session and a per-session factor that does not stop at 1 weekly pp
 
-**Status**: In Progress — M3 delivered, acceptance passed, legend wording (M3b) left
+**Status**: Closed — Delivered M1-M3b. Live weekly window: range ratio 11.98 5-hour pp per weekly pp (9 windows), weekly-eq 40.48 pp vs 43 pp attributed (gap -2.5 pp), 58 of 126 sessions with a 5-hour factor (22 measured) vs 5 before; 5-hour and weekly invariants exact; hand checks match (measured 30.03x). Models: Haiku 24.6x, Opus 74.7x on solo rises.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
