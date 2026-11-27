@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,11 @@ func DefaultCompactThreshold() (int, error) {
 	}
 	return spec.CompactThreshold, nil
 }
+
+// errCompactDisabled is returned when the resolved threshold is zero or
+// negative. A zero is an intentional opt-out, not a failure, so callers can
+// tell it apart from a real resolution error with errors.Is.
+var errCompactDisabled = errors.New("agent compact threshold must be positive")
 
 type compactConfig struct {
 	Agent struct {
@@ -53,7 +59,7 @@ func CompactThreshold(model Model) (int, error) {
 			if n, ok := thresholds[key]; ok {
 				threshold = n
 				if threshold <= 0 {
-					return 0, fmt.Errorf("agent compact threshold must be positive")
+					return 0, errCompactDisabled
 				}
 				return threshold, nil
 			}
@@ -64,7 +70,7 @@ func CompactThreshold(model Model) (int, error) {
 		threshold = spec.CompactThreshold
 	}
 	if threshold <= 0 {
-		return 0, fmt.Errorf("agent compact threshold must be positive")
+		return 0, errCompactDisabled
 	}
 	return threshold, nil
 }

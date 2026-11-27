@@ -3,6 +3,7 @@ package subagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,7 +25,8 @@ const claudeCompactWindowEnv = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
 func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
 	threshold, err := CompactThreshold(model)
 	if err != nil {
-		if warn != nil {
+		// A zero threshold is an intentional opt-out: stay silent.
+		if !errors.Is(err, errCompactDisabled) && warn != nil {
 			fmt.Fprintf(warn, "harnez: no %s for %s: %v\n", claudeCompactWindowEnv, model.Spec(), err)
 		}
 		return environ
@@ -39,7 +41,13 @@ func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
 		}
 	}
 	if found {
-		if n, convErr := strconv.Atoi(caller); convErr == nil && n > threshold && warn != nil {
+		n, convErr := strconv.Atoi(caller)
+		switch {
+		case convErr != nil:
+			if warn != nil {
+				fmt.Fprintf(warn, "harnez: %s=%q is not a number; Claude gets it unchanged\n", claudeCompactWindowEnv, caller)
+			}
+		case n > threshold && warn != nil:
 			fmt.Fprintf(warn, "harnez: %s=%d is above the compaction threshold %d for %s; Claude compacts at the caller value\n", claudeCompactWindowEnv, n, threshold, model.Spec())
 		}
 		return environ

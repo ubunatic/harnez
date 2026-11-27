@@ -125,10 +125,34 @@ func TestClaudeChildEnvUnchangedWhenThresholdDisabled(t *testing.T) {
 	var warn bytes.Buffer
 	env := []string{"PATH=/bin"}
 	if got := claudeChildEnv(claudeEnvModel, env, &warn); len(got) != 1 || got[0] != "PATH=/bin" {
-		t.Fatalf("env %v; want unchanged when no threshold resolves", got)
+		t.Fatalf("env %v; want unchanged when the threshold is disabled", got)
 	}
-	if !strings.Contains(warn.String(), claudeWindowVar) {
-		t.Fatalf("warning %q; want a note that the window is not set", warn.String())
+	if warn.Len() != 0 {
+		t.Fatalf("disabled threshold warned: %q; want silence for an intentional 0", warn.String())
+	}
+}
+
+func TestClaudeChildEnvWarnsOnRealResolutionError(t *testing.T) {
+	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: [oops\n")
+	var warn bytes.Buffer
+	env := []string{"PATH=/bin"}
+	if got := claudeChildEnv(claudeEnvModel, env, &warn); len(got) != 1 || got[0] != "PATH=/bin" {
+		t.Fatalf("env %v; want unchanged on a resolution error", got)
+	}
+	if !strings.Contains(warn.String(), claudeWindowVar) || !strings.Contains(warn.String(), "parse agent compact config") {
+		t.Fatalf("warning %q; want the resolution error named", warn.String())
+	}
+}
+
+func TestClaudeMalformedCallerWindowKeptWithWarning(t *testing.T) {
+	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: 150000\n")
+	var warn bytes.Buffer
+	env := []string{claudeWindowVar + "=abc"}
+	if got := claudeChildEnv(claudeEnvModel, env, &warn); len(got) != 1 || got[0] != claudeWindowVar+"=abc" {
+		t.Fatalf("env %v; want malformed caller value kept as-is", got)
+	}
+	if !strings.Contains(warn.String(), "not a number") {
+		t.Fatalf("warning %q; want a malformed-value warning", warn.String())
 	}
 }
 
