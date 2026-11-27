@@ -1,6 +1,6 @@
 # 1309 — harnez usage: read Claude transcripts from extra config dirs (taia) without a taia dependency
 
-**Status**: Open
+**Status**: Closed — Report reads claude_config_dirs (spec default ~/.claude, local.yaml override). Live with the taia dir: 148 sessions (19 taia), weekly not-explained 14->1 pp, 5h not-explained 203->4 pp, API $126.03 = attrib 123.59 + unattrib 2.44, W-EQ gap 1.09 pp; d957448b $2.47 matches a hand recompute (Claude cost-state $2.09 counts fewer cache-write tokens).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
