@@ -32,6 +32,29 @@
 | D | **Symlink** taia's `projects/*` into `~/.claude/projects` | None in code | No code, but it mixes dirs that Claude Code itself manages and risks slug collisions. Not recommended. |
 | E | **OpenTelemetry**: Claude Code's own `OTEL_*` export from taia sessions into a harnez OTLP receiver | Needs taia to pass env through | Live data without reading files, but a large new receiver and a taia change. Out of scope. |
 
+## Assessment: hooks in confined taia sessions vs. reading files on the host (2026-11-27)
+
+The owner's constraint: taia sessions run confined, and taia's hooks must not call into `harnez usage`. If hooks are added, they must work under any confinement, for example by talking to the collector over the network.
+
+What each data source needs:
+
+| Data | Source today | Needs a hook in taia? |
+|---|---|---|
+| Tokens, cost, calls, model, per-session attribution | Transcript JSONL, read by harnez on the host | No. The confined Claude writes to `~/.local/state/taia/claude`, a host dir bound read-write into the sandbox (taia `claudebwrap.go`, `--bind m.Config`). harnez reads it from outside. |
+| Weekly and 5-hour quota samples | The host collector polls `api.anthropic.com/api/oauth/usage` (`internal/usage/claude.go:19`). The quota is per account. | No. taia's use already shows in these samples; only its attribution is missing. |
+| Compaction point (`pre_tokens`) | `compact_boundary` in the transcript | No. It is the same file. |
+| Live statusline, session-boundary rows, `tool_calls` | Claude hooks and statusline | Yes, but taia runs Claude headless (stream-json), so there is no statusline. Nothing the report needs. |
+
+Hook transport, if it is ever wanted:
+- **Today:** the collector listens only on a Unix socket (`spec/server.yaml` `socket_path: server.sock`). A confined process reaches it only through harnez's own runner broker FD (`internal/server/runner_channel.go:187`) or a bind of the socket dir. taia has neither, and adding either would tie taia to harnez.
+- **Network:** taia's bwrap does not unshare the network (`claudebwrap.go:30`), so a localhost TCP or HTTP endpoint would be reachable from any confinement that keeps network access. Costs:
+  - a new listener;
+  - an auth token that must be passed into the sandbox, where the agent can read it;
+  - any local process could inject telemetry rows.
+- **Coupling:** the hook still has to live in taia's Claude config. It is loose only if the hook is a plain HTTP POST of the hook payload, so that no harnez binary runs in the sandbox. Unverified: whether Claude Code supports HTTP-type hooks in the installed version. Check `claude --version` against the hooks docs before relying on it.
+
+**Verdict:** option A needs no hooks, no network and no harnez code in taia, and confinement does not matter to it. Hooks over the network would add only live-only rows that the report does not use, at the cost of a new authenticated listener. Recommendation: A. Revisit network hooks only if a live, per-turn view of taia sessions becomes a goal (its own ticket).
+
 ## Constraints for any option
 
 - Read-only on other config dirs: never write, never read their `settings.json` or credentials. Only `projects/` is used for usage.
