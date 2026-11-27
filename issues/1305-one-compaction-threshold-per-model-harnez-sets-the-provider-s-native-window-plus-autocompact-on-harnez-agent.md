@@ -88,6 +88,45 @@ Add the rows to the M0 table; report the reserve (or none) with numbers.
 - Milestones stay as written: M1 env from the threshold (no flag yet), M2 the flag. The developer's plan merged them;
   splitting keeps each diff small for review.
 
+## M0b delivered (host re-checked the raw stream files)
+| Run | env | settings file | Peak prompt | Requests > 100k | Compactions (pre-compact) |
+|---|---|---|---|---|---|
+| b1 | 150000 | 200k | 113.2k | 2 | 1 (117.8k) |
+| b2 | 60000 | 200k | 65.1k | 0 | 3 (65.9k, 65.7k, 68.8k) |
+| b3 | unset | `autoCompactWindow: 100000` | 67.6k | 0 | 3 (66.0k, 66.9k, 71.3k) |
+
+- Claude triggers about 33k below the window (150k -> 117.8k, 100k -> about 66k), and values under 100k act as
+  100k. Env and settings key mean the same; env wins. The 1264 "96-106k at 100k" reading does not reproduce in
+  claude 2.1.330 (M3 notes it, no re-run).
+- Consequence: a harnez threshold T on Claude compacts natively at about T - 33k (floor about 66k). The watchdog
+  at T is a backstop that should rarely fire. The Decision's mapping (env = T) stands.
+
+## M1 delivered (9d46d363): Claude children get the harnez window
+`claudeChildEnv` (`internal/subagent/claude.go`) sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW` from `CompactThreshold` on
+Run, Resume, RunStream, ResumeStream (compact goes through Resume); a caller value is kept, warned only when above.
+`runProviderCLI` takes an env (nil inherits). Tests use a fake `claude`/`pi` on PATH and a temp HOME.
+`make test-q1` green (83 packages), but it ran twice: the first run failed, and the rerun should have covered only
+the touched package, with the full run left to the host.
+
+## M2 pre-work / required refinements (do first)
+1. `claude_env_test.go`: `os.Unsetenv(claudeWindowVar)` does not restore the outer value. Use
+   `t.Setenv(claudeWindowVar, "")` first, then unset, so the test is hermetic.
+2. Disabled threshold (config 0): a warning on every Claude turn is noise for an intentional setting. Stay silent
+   for the disabled case and warn only on a real resolution error. Test both.
+3. A non-numeric caller value (`CLAUDE_CODE_AUTO_COMPACT_WINDOW=abc`) is kept without a word. Warn that it is
+   malformed (it stays as-is; Claude decides). Test it.
+
+## M2 scope: `--autocompact` on `harnez agent start` and `resume`
+- Values `100k`, `100000`, `<num>`, `auto` (the resolved threshold). `0`, negative, `1.5k`, `12x` fail before launch.
+- Precedence: flag > caller env > threshold. With the flag, the Claude child gets the flag value even when the
+  caller set the env (one stderr note that the flag overrides it). Watchdog and pre-turn `/compact` use the same
+  effective value.
+- Codex: the flag value goes into `model_auto_compact_token_limit` (start and resume). Pi: honor it if the Pi path
+  has a compaction threshold setting, else fail before launch. agy and Jules fail before launch with a clear error.
+- Persist the value in the session; a resume without the flag reuses it, a resume with the flag replaces it.
+- Read `docs/CLIDesign.md` first. Help text and the man page come from cobra; update the help string.
+- Unit test from Acceptance: `--autocompact 120k` puts 120000 in the Claude child env and the watchdog fires at 120k.
+
 ## Acceptance
 - Live Haiku canary with the owner's settings at 200k: a harnez agent with threshold 100k shows 0 requests over 100k.
 - `--autocompact 120k` on a Claude agent: the child env carries 120000 and the watchdog fires at 120k (unit test);
