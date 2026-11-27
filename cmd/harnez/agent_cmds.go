@@ -410,12 +410,6 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 			}
 			ac.name = name
 		}
-		if resumeInteractive {
-			if err := validateInteractiveFlags(cmd, false, ac.jsonOut, ac.streamMode, ac.agentTimeout, resumeWorkerID != ""); err != nil {
-				return err
-			}
-			return runInteractiveResume(cmd, interactiveDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir}, interactiveResumeRequest{Name: ac.name, Prompt: prompt, Dir: ac.workDir, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
-		}
 		maxToolCallsSet := cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls")
 		autoSet, autoTokens, err := autocompactFlag(cmd, resumeAutocompact)
 		if err != nil {
@@ -423,6 +417,12 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 		}
 		if autoSet && resumeInteractive {
 			return fmt.Errorf("--autocompact cannot be combined with interactive mode")
+		}
+		if resumeInteractive {
+			if err := validateInteractiveFlags(cmd, false, ac.jsonOut, ac.streamMode, ac.agentTimeout, resumeWorkerID != ""); err != nil {
+				return err
+			}
+			return runInteractiveResume(cmd, interactiveDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir}, interactiveResumeRequest{Name: ac.name, Prompt: prompt, Dir: ac.workDir, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
 		}
 		if resumeWorkerID != "" {
 			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{AutocompactSet: autoSet, AutocompactTokens: autoTokens, Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet}, ac.storeDir)

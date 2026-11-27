@@ -27,8 +27,8 @@ The threshold reaches each provider in one of two ways:
 | Provider | How the threshold reaches the CLI | Role of harnez's own check |
 | --- | --- | --- |
 | Claude | env `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<threshold>` on the child (`claudeChildEnv`, harnez value last) | **Backstop.** Claude compacts natively first, about 33k below the window (M0b). The pre-turn `/compact` and the stream watchdog at the threshold catch what it misses. |
-| Codex | `-c model_auto_compact_token_limit=<threshold>` (`codex.go`) | **Primary** for the native trigger. Pre-turn `/compact` and the watchdog stay as backstops (unmeasured for the exact limit). |
-| Pi, lmcoder | not passed to the CLI; harnez's own checks where the driver supports them (**unverified** for Pi here) | Only mechanism. `--autocompact` fails before launch for Pi and lmcoder, and for agy and Jules. |
+| Codex | `-c model_auto_compact_token_limit=<threshold>` (`codex.go`) | **Primary.** Codex's own `-c` limit triggers its native compaction. Harnez's pre-turn `/compact` and the watchdog are **backstops** (the exact limit is unmeasured). |
+| Pi, lmcoder | not passed to the CLI. Harnez's checks are the pre-turn RPC `compact` command (`internal/subagent/pi.go`) and the `pi_compaction` spec settings (`small_window_threshold_tokens`, `reserve_fraction`, `keep_recent_fraction`). Pi's native behaviour here is **unverified**. | Only mechanism. `--autocompact` fails before launch for Pi and lmcoder, and for agy and Jules. |
 | agy, Jules | no native trigger; automatic compaction off | Off. `--autocompact` fails before launch. |
 
 Watchdog and pre-turn `/compact` use the same resolved value as the env or `-c` argument, so a `--autocompact 120k`

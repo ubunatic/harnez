@@ -1073,6 +1073,9 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		}
 		m := sessionModel(sess)
 		if req.AutocompactSet {
+			if err := checkAutocompactProvider(sess.Provider); err != nil {
+				return err
+			}
 			m.CompactTokens = req.AutocompactTokens
 		}
 		return printAgentPreview(cmd, m, role, sess.Name, sess.WorkingDir, sess.ProviderID(), req.Prompt, req.PromptSource, "", approve, true, req.AcceptCost, d.availability)
@@ -1115,12 +1118,6 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		if err := checkAutocompactProvider(sess.Provider); err != nil {
 			return err
 		}
-		if sess.CompactTokens != req.AutocompactTokens {
-			sess.CompactTokens = req.AutocompactTokens
-			if err := s.Save(sess); err != nil {
-				return fmt.Errorf("save --autocompact for session %q: %w", sess.Name, err)
-			}
-		}
 	}
 	if sess.Status == "running" && req.SessionID == "" {
 		sess.Status = "failed"
@@ -1157,6 +1154,13 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return err
 		}
 	}
+	// The stored window is set in memory only after every refusal above has
+	// passed, and saved after the launch checks below, so a refused resume
+	// leaves compact_tokens unchanged.
+	persistCompact := req.AutocompactSet && sess.CompactTokens != req.AutocompactTokens
+	if req.AutocompactSet {
+		sess.CompactTokens = req.AutocompactTokens
+	}
 	model := sessionModel(sess)
 	tcGuard, err := newToolCallGuard(model, role, req.MaxToolCalls, req.MaxToolCallsSet, cmd.ErrOrStderr())
 	if err != nil {
@@ -1192,6 +1196,11 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
 				return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)
 			}
+		}
+	}
+	if persistCompact {
+		if err := s.Save(sess); err != nil {
+			return fmt.Errorf("save --autocompact for session %q: %w", sess.Name, err)
 		}
 	}
 	tl := newTimeline(cmd)
@@ -1661,8 +1670,8 @@ func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagen
 	if x.HarnessType == "interactive" && x.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
 	}
-	driver := withAgyMeterSession(agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}, x.WorkingDir), x.ID)
-	result, err := driver.Compact(cmd.Context(), x.ProviderID(), subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier})
+	driver := withAgyMeterSession(agentDriver(sessionModel(x), x.WorkingDir), x.ID)
+	result, err := driver.Compact(cmd.Context(), x.ProviderID(), sessionModel(x))
 	if err != nil {
 		return err
 	}
