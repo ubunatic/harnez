@@ -1,6 +1,6 @@
 # 1308 — usage history report: 5-hour share per session and a per-session factor that does not stop at 1 weekly pp
 
-**Status**: In Progress — M1 delivered, M2 next
+**Status**: In Progress — M2 delivered, ratio fix (M2b) next
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -72,6 +72,17 @@ Plan accepted: parameterise the window selector (`isClaudeWeekly`, `windowStart`
 2. The per-window weekly-delta sum test deferred from M1 (decision 1).
 3. The text summary line under the table states the ratio, the number of 5-hour windows it used and `min_ratio_weekly_pct`; without a ratio it says why.
 4. Review: to spare the Claude weekly quota (92 % at 15:50 CET, resets 2026-11-28 11:00 UTC), no per-milestone Claude reviewer. One agy:neon:low one-shot review covers M1+M2 (separate agy plan). If the Claude weekly quota reaches 97 %, the host pauses the sprint.
+
+### M2 delivered: ratio, weekly-equivalent pp, 5-hour factor, models (251237c0)
+- Spec keys `min_ratio_weekly_pct` (4) and `min_session_five_hour_pct` (1) with schema; `fiveh.go` (window partition, range ratio, quiet check via weekly-eq pp, solo shares, `ModelRow`); `5H W-EQ %` and `5H FACTOR` columns with measured/split; summary and legend lines; `ratio_test.go`. Dev: 83 ok, 0 FAIL, but several package runs before `make test-q1` (over the one-run budget).
+- Host live check (installed binary, `--window weekly`): quiet fix works (25bf9316 now n/a, $0.0019 unattributed). 57 of 123 sessions have a 5-hour factor (22 measured), against 5 with a weekly factor. Σ session 5-hour shares 466 + not explained 204 = 670 (exact). Weekly invariants unchanged (55 rise, 41 attributed, 14 not explained).
+- **Implausible: range ratio 6.88 from 8 windows**, against M0 12.5 and raw 670 / 55 = 12.2. So Σ weekly-eq is 67.7 pp against 41 pp weekly attributed, and every 5-hour factor is about 1.75 times too low (Haiku 14.3x, Opus 43.3x). Cause: the 8 windows match M0's 7 windows with ≥ 4 weekly pp plus the anomalous first window. In `fiveHourWindows` (fiveh.go:89), when the weekly group changes between `prevAt` and a window's last sample, `weekly = v` (the new group's peak from 0). The weekly report instead takes the new group's first sample as the baseline (#1302 M5). The first in-range window (the weekly reset on 11-21 11:00, first sample on 11-23 07:07) so gets the whole pre-sample weekly level (about 38-44 pp) as its rise.
+
+**Pre-Work for M2b (fix before M3):**
+1. On a weekly-group change, the window's weekly rise = the peak at its last sample minus the new group's first-sample value, which is the same baseline as the weekly timeline. Apply the same rule to the 5-hour pp of the window that holds the first sample, if `rises` does not already exclude the pre-sample level. Reproduction test first: a weekly reset, then a sample gap, then a new group whose first weekly sample is 40 % and whose 5-hour rises are small. The ratio must not count the 40.
+2. The partition-sum test from M1 pre-work 1, still missing: over in-range windows, Σ window weekly rises = `weekly_rise_pct` of the same report, including the reset-gap fixture from item 1.
+3. Expected live result after the fix: ratio about 12 (M0 12.5; raw 12.2), Σ weekly-eq near 41 pp, and the gap printed. The host checks this; the developer does not run the live report.
+4. One `make test-q1` only; no package runs before it.
 
 ### M1 — 5-hour share per session (Q2)
 - Run the same interval attribution on the Claude 5-hour window: resets every 5 hours are expected, not errors. Reuse the weekly code path; do not copy it.
