@@ -89,3 +89,25 @@ Decision (host): non-JSON Claude prompts now get `withProtocol(...)` (dispatch p
 3. **LOW: resume after a stop compacts first:** a test that resumes a stopped session and asserts `/compact` ran before the prompt.
 4. **LOW: resume drops the family preamble** because `provider` is `""` (`agent_run.go:1284`). Fix or explain.
 5. Then the M2 scope: arm the watchdog for `--json` start and resume and the detached child (`agent_run.go:727`, `:1233`, `agent_async.go:304`) whenever the driver can stream; stop = one JSON document with status `stopped` on stdout, message on stderr, non-zero exit; `peak_context_tokens` on the turn record, JSON output and `[done:]`.
+
+## M2 delivered (dabe6218)
+
+- A watchdog-stopped Claude turn is metered from the calls that finished (`PartialTurnError`, lenient `parseClaudePartial`): turn record, session totals, quota before/after, cost row.
+- Claude streams under `--json` and in detached children, so the watchdog arms there. A `--json` stop prints one document with status `stopped` and exits non-zero.
+- `peak_context_tokens` on TurnResult, TurnRecord, JSON output and `[done:]`.
+- Host: full `make test-q1` 83 ok, 0 FAIL (the developer's one run failed in a quota-lifecycle stub, fixed; touched packages green). Pushed to both remotes, installed.
+- Review (opus:med, 1m19s): metering counts once on start and resume; dropping the `streaming` check is safe because only Claude emits `Event.ContextTokens` (`internal/subagent/claude.go:449`); `claudeStopError` keeps Claude's own errors.
+
+## Decision (host, decide mode, M2 review 2026-11-27)
+
+- `--json` streaming stays Claude-only (developer's narrowing of "whenever the driver can stream"): it is the ticket scope and keeps Codex batch behaviour unchanged.
+
+## M3 pre-work / required refinements
+
+1. **HIGH (host verified):** `cmd/harnez/agent_async.go:429-434` (start worker) and `:484-489` (resume worker) overwrite the saved `stopped` status and watchdog `LastError` with `failed` when `runStart`/`runResume` returns the watchdog error. Keep `stopped` for a watchdog stop (a typed or sentinel error, not string matching). Test the detached worker path: status `stopped`, `ContextTokens` kept, resume compacts first.
+2. **MED:** `agent_run.go:866`, a start stop with an empty provider session id prints nothing under `--json` and skips the quota readings. Print the one stopped document and record the quota before/after; test it.
+3. **MED tests:** in `agent_claude_meter_test.go:74-130` assert the session totals and `TokensSinceCompact` after a stop, and quota reads `== 2`, not `>= 2`. Add the canary case: a main-chain peak above the last call (e.g. 90k then 60k, threshold not crossed), peak 90000 and context 60000, in both `claude_partial_test.go` and a completed-turn test; the current fixtures all have peak == last.
+4. **LOW:** partial parse with one message id repeated with growing usage, and a cut-off repeat of it: counted once, last complete usage.
+5. **LOW (M1):** `agent_run.go:1340-1350`, a stale-resume fallback that is then stopped keeps the old provider id; store `observedSessionID`.
+6. **LOW:** a JSON resume stop test (one document, status `stopped`, non-zero).
+7. **M3 scope (unchanged):** docs `docs/AutoCompaction.md:13-15`, `:42-43` (stale 80k), `docs/HarnezAgentArchitecture.md` (watchdog on every Claude turn, stopped JSON document, `peak_context_tokens`, the `withProtocol` CONFIRM line on Claude prompts). Then the host reruns the canary in both modes.
