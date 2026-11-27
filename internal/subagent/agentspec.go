@@ -22,33 +22,34 @@ import (
 const agentSpecPath = "spec/agent.yaml"
 
 type agentSpec struct {
-	ModelTraits           map[string]string              `yaml:"model_traits"`
-	DefaultModel          string                         `yaml:"default_model"`
-	DefaultRole           string                         `yaml:"default_role"`
-	Preambles             map[string]string              `yaml:"preambles"`
-	RoleClassifyTimeoutMS int                            `yaml:"role_classify_timeout_ms"`
-	ModelsLegend          string                         `yaml:"models_legend"`
-	CostlyModels          []string                       `yaml:"costly_models"`
-	Models                map[string]modelAlias          `yaml:"models"`
-	Roles                 map[string]RoleSpec            `yaml:"roles"`
-	PlanPrices            map[string]*PlanPriceSpec      `yaml:"plan_prices"`
-	PlanFX                *PlanFXSpec                    `yaml:"plan_fx"`
-	PlanVATRate           *float64                       `yaml:"plan_vat_rate"`
-	Stop                  StopSpec                       `yaml:"stop"`
-	Selftest              SelftestSpec                   `yaml:"selftest"`
-	ExternalSessions      map[string]ExternalSessionSpec `yaml:"external_sessions"`
-	ReplyHistoryLimit     int                            `yaml:"reply_history_limit"`
-	CompactThreshold      int                            `yaml:"compact_threshold_tokens"`
-	CompactThresholds     map[string]int                 `yaml:"compact_thresholds"`
-	CostCheck             CostCheckSpec                  `yaml:"cost_check"`
-	AutoCompact           AutoCompactSpec                `yaml:"auto_compact"`
-	PiCompaction          PiCompactionSpec               `yaml:"pi_compaction"`
-	ToolCallLimits        ToolCallLimitsSpec             `yaml:"tool_call_limits"`
-	ContextModes          map[string]ContextModeSpec     `yaml:"context_modes"`
-	StaleSessionErrors    map[string][]string            `yaml:"stale_session_errors"`
-	KnownErrorChecks      []KnownErrorCheckSpec          `yaml:"known_error_checks"`
-	ResumeNote            ResumeNoteSpec                 `yaml:"resume_note"`
-	Jules                 JulesSpec                      `yaml:"jules"`
+	ModelTraits               map[string]string              `yaml:"model_traits"`
+	DefaultModel              string                         `yaml:"default_model"`
+	DefaultRole               string                         `yaml:"default_role"`
+	Preambles                 map[string]string              `yaml:"preambles"`
+	RoleClassifyTimeoutMS     int                            `yaml:"role_classify_timeout_ms"`
+	ModelsLegend              string                         `yaml:"models_legend"`
+	CostlyModels              []string                       `yaml:"costly_models"`
+	Models                    map[string]modelAlias          `yaml:"models"`
+	Roles                     map[string]RoleSpec            `yaml:"roles"`
+	PlanPrices                map[string]*PlanPriceSpec      `yaml:"plan_prices"`
+	PlanFX                    *PlanFXSpec                    `yaml:"plan_fx"`
+	PlanVATRate               *float64                       `yaml:"plan_vat_rate"`
+	Stop                      StopSpec                       `yaml:"stop"`
+	Selftest                  SelftestSpec                   `yaml:"selftest"`
+	ExternalSessions          map[string]ExternalSessionSpec `yaml:"external_sessions"`
+	ReplyHistoryLimit         int                            `yaml:"reply_history_limit"`
+	CompactThreshold          int                            `yaml:"compact_threshold_tokens"`
+	CompactThresholds         map[string]int                 `yaml:"compact_thresholds"`
+	ClaudeCompactWindowOffset int                            `yaml:"claude_compact_window_offset_tokens"`
+	CostCheck                 CostCheckSpec                  `yaml:"cost_check"`
+	AutoCompact               AutoCompactSpec                `yaml:"auto_compact"`
+	PiCompaction              PiCompactionSpec               `yaml:"pi_compaction"`
+	ToolCallLimits            ToolCallLimitsSpec             `yaml:"tool_call_limits"`
+	ContextModes              map[string]ContextModeSpec     `yaml:"context_modes"`
+	StaleSessionErrors        map[string][]string            `yaml:"stale_session_errors"`
+	KnownErrorChecks          []KnownErrorCheckSpec          `yaml:"known_error_checks"`
+	ResumeNote                ResumeNoteSpec                 `yaml:"resume_note"`
+	Jules                     JulesSpec                      `yaml:"jules"`
 }
 
 // CostCheckSpec holds the spec/agent.yaml cost_check thresholds (issue 985); zero disables a trigger.
@@ -258,6 +259,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if spec.CompactThreshold <= 0 {
 		return agentSpec{}, fmt.Errorf("agent spec: positive compact_threshold_tokens required")
+	}
+	if spec.ClaudeCompactWindowOffset < 0 {
+		return agentSpec{}, fmt.Errorf("agent spec: claude_compact_window_offset_tokens must not be negative")
 	}
 	for key, threshold := range spec.CompactThresholds {
 		if threshold <= 0 {

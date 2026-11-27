@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -108,8 +109,8 @@ func TestAutocompactStartAcceptance(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("runStart error = %v, want %q", err, want)
 	}
-	if got := readWindow(t, envPath); got != "120000" {
-		t.Fatalf("child CLAUDE_CODE_AUTO_COMPACT_WINDOW = %q, want 120000", got)
+	if got, want := readWindow(t, envPath), claudeWindowFor(t, 120000); got != want {
+		t.Fatalf("child CLAUDE_CODE_AUTO_COMPACT_WINDOW = %q, want %s (120000 plus the spec offset)", got, want)
 	}
 	sess, err := resolveSession(store, "claude-auto", "")
 	if err != nil {
@@ -129,7 +130,7 @@ func TestAutocompactResumePersisted(t *testing.T) {
 		tail       string
 		req        resumeRequest
 		wantStored int
-		wantWindow string
+		wantWindow int
 		wantErr    string
 	}{
 		{
@@ -138,7 +139,7 @@ func TestAutocompactResumePersisted(t *testing.T) {
 			tail:       "sleep 5",
 			req:        resumeRequest{},
 			wantStored: 120000,
-			wantWindow: "120000",
+			wantWindow: 120000,
 			wantErr:    "crossed live token threshold at 120000 tokens (limit 120000)",
 		},
 		{
@@ -146,7 +147,7 @@ func TestAutocompactResumePersisted(t *testing.T) {
 			stream:     claudeLiveStream(claudeLiveInit(), claudeLiveAssistant("msg_small", 1000, "null"), claudeLiveResult(1000)),
 			req:        resumeRequest{AutocompactSet: true, AutocompactTokens: 150000},
 			wantStored: 150000,
-			wantWindow: "150000",
+			wantWindow: 150000,
 		},
 		{
 			name:       "auto clears stored value",
@@ -181,9 +182,9 @@ func TestAutocompactResumePersisted(t *testing.T) {
 			if sess.CompactTokens != tc.wantStored {
 				t.Fatalf("stored CompactTokens = %d, want %d", sess.CompactTokens, tc.wantStored)
 			}
-			if tc.wantWindow != "" {
-				if got := readWindow(t, envPath); got != tc.wantWindow {
-					t.Fatalf("child window = %q, want %s", got, tc.wantWindow)
+			if tc.wantWindow != 0 {
+				if got, want := readWindow(t, envPath), claudeWindowFor(t, tc.wantWindow); got != want {
+					t.Fatalf("child window = %q, want %s (%d plus the spec offset)", got, want, tc.wantWindow)
 				}
 			}
 		})
@@ -206,8 +207,8 @@ func TestDetachedResumeWorkerAutocompact(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "crossed live token threshold at 120000 tokens (limit 120000)") {
 		t.Fatalf("detached resume worker error = %v, want a watchdog stop at 120000", err)
 	}
-	if got := readWindow(t, envPath); got != "120000" {
-		t.Fatalf("worker child CLAUDE_CODE_AUTO_COMPACT_WINDOW = %q, want 120000", got)
+	if got, want := readWindow(t, envPath), claudeWindowFor(t, 120000); got != want {
+		t.Fatalf("worker child CLAUDE_CODE_AUTO_COMPACT_WINDOW = %q, want %s (120000 plus the spec offset)", got, want)
 	}
 	sess, err := store.Get("det-auto-1")
 	if err != nil {
@@ -216,4 +217,18 @@ func TestDetachedResumeWorkerAutocompact(t *testing.T) {
 	if sess.CompactTokens != 120000 {
 		t.Fatalf("stored CompactTokens = %d, want 120000", sess.CompactTokens)
 	}
+}
+
+// claudeWindowFor is the CLAUDE_CODE_AUTO_COMPACT_WINDOW harnez sets for a
+// threshold: the threshold plus the spec offset (issue 1306).
+func claudeWindowFor(t *testing.T, threshold int) string {
+	t.Helper()
+	n, err := subagent.ClaudeCompactWindow(threshold)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n <= threshold {
+		t.Fatalf("window %d for threshold %d: want the spec offset added", n, threshold)
+	}
+	return strconv.Itoa(n)
 }

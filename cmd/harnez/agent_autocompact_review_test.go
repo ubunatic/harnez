@@ -76,8 +76,8 @@ func TestCompactChildGetsStoredWindow(t *testing.T) {
 	if err := compactSession(cmd, store, sess); err != nil {
 		t.Fatalf("compactSession: %v", err)
 	}
-	if got := readWindow(t, envPath); got != "120000" {
-		t.Fatalf("compact child window = %q, want 120000", got)
+	if got, want := readWindow(t, envPath), claudeWindowFor(t, 120000); got != want {
+		t.Fatalf("compact child window = %q, want %s (120000 plus the spec offset)", got, want)
 	}
 }
 

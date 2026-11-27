@@ -61,7 +61,7 @@
       "additionalProperties": false
     }
   },
-  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "auto_compact", "pi_compaction", "context_modes", "default_role", "models", "roles", "stop", "external_sessions", "model_traits", "jules"],
+  "required": ["default_model", "role_classify_timeout_ms", "reply_history_limit", "compact_threshold_tokens", "claude_compact_window_offset_tokens", "auto_compact", "pi_compaction", "context_modes", "default_role", "models", "roles", "stop", "external_sessions", "model_traits", "jules"],
   "properties": {
     "role_classify_timeout_ms": { "type": "integer", "minimum": 1 },
     "reply_history_limit": { "type": "integer", "minimum": 1 },
@@ -93,6 +93,7 @@
       "additionalProperties": false
     },
     "compact_threshold_tokens": { "type": "integer", "minimum": 1, "description": "Default context token threshold for automatic agent compaction." },
+    "claude_compact_window_offset_tokens": { "type": "integer", "minimum": 0, "description": "Tokens added to the compaction threshold for CLAUDE_CODE_AUTO_COMPACT_WINDOW; Claude compacts about 33k below that window (issue 1306)." },
     "compact_thresholds": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 }, "description": "Model-specific default compaction thresholds." },
     "cost_check": {
       "type": "object",

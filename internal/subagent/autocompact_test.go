@@ -3,6 +3,7 @@ package subagent
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -44,19 +45,20 @@ func TestClaudeChildEnvAutocompactReplacesCallerWindow(t *testing.T) {
 	environ := []string{"PATH=/bin", "CLAUDE_CODE_AUTO_COMPACT_WINDOW=50000", "HOME=/tmp/h", "CLAUDE_CODE_AUTO_COMPACT_WINDOW=60000"}
 	var warn bytes.Buffer
 	out := claudeChildEnv(model, environ, &warn)
+	want := fmt.Sprintf("%s=%d", claudeCompactWindowEnv, 120000+specWindowOffset(t))
 	var windows []string
 	for _, kv := range out {
 		if strings.HasPrefix(kv, claudeCompactWindowEnv+"=") {
 			windows = append(windows, kv)
 		}
 	}
-	if len(windows) != 1 || windows[0] != claudeCompactWindowEnv+"=120000" {
-		t.Fatalf("window entries = %q, want exactly [%s=120000]", windows, claudeCompactWindowEnv)
+	if len(windows) != 1 || windows[0] != want {
+		t.Fatalf("window entries = %q, want exactly [%s]", windows, want)
 	}
-	if !strings.Contains(out[len(out)-1], "CLAUDE_CODE_AUTO_COMPACT_WINDOW=120000") {
+	if out[len(out)-1] != want {
 		t.Fatalf("harnez value must be last so it is the one Claude sees, got %q", out)
 	}
-	if !strings.Contains(warn.String(), "replaced by --autocompact 120000") {
+	if !strings.Contains(warn.String(), "(--autocompact 120000)") {
 		t.Fatalf("warning = %q, want a replaced-by note", warn.String())
 	}
 }
@@ -64,9 +66,10 @@ func TestClaudeChildEnvAutocompactReplacesCallerWindow(t *testing.T) {
 func TestClaudeChildEnvAutocompactSameCallerValueIsSilent(t *testing.T) {
 	model := Model{Provider: "claude", Name: "haiku", Tier: "low", CompactTokens: 120000}
 	var warn bytes.Buffer
-	out := claudeChildEnv(model, []string{"CLAUDE_CODE_AUTO_COMPACT_WINDOW=120000"}, &warn)
-	if len(out) != 1 || out[0] != "CLAUDE_CODE_AUTO_COMPACT_WINDOW=120000" {
-		t.Fatalf("env = %q, want one window entry at 120000", out)
+	want := fmt.Sprintf("CLAUDE_CODE_AUTO_COMPACT_WINDOW=%d", 120000+specWindowOffset(t))
+	out := claudeChildEnv(model, []string{want}, &warn)
+	if len(out) != 1 || out[0] != want {
+		t.Fatalf("env = %q, want one window entry %s", out, want)
 	}
 	if warn.Len() != 0 {
 		t.Fatalf("warning = %q, want none for an equal caller value", warn.String())
@@ -99,7 +102,7 @@ func TestSessionCompactTokensJSON(t *testing.T) {
 
 func TestCompactWindowLine(t *testing.T) {
 	got := CompactWindowLine(Model{Provider: "claude", Name: "haiku", Tier: "low", CompactTokens: 120000})
-	if want := "120000 (--autocompact, env CLAUDE_CODE_AUTO_COMPACT_WINDOW)"; got != want {
+	if want := fmt.Sprintf("120000 (--autocompact, env CLAUDE_CODE_AUTO_COMPACT_WINDOW=%d)", 120000+specWindowOffset(t)); got != want {
 		t.Fatalf("claude --autocompact line = %q, want %q", got, want)
 	}
 	got = CompactWindowLine(Model{Provider: "codex", Name: "luna", Tier: "low"})

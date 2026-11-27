@@ -18,31 +18,14 @@ import (
 const claudeCompactWindowEnv = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
 
 // claudeChildEnv returns environ with CLAUDE_CODE_AUTO_COMPACT_WINDOW set to
-// the harnez compaction threshold for model. A value the caller already set is
-// kept, and a warning goes to warn when it is above the threshold. When no
-// threshold resolves (for example a config that sets 0), the child gets
-// environ unchanged, as the start path disables its watchdog in that case.
+// the harnez compaction threshold for model plus the spec's
+// claude_compact_window_offset_tokens (see ClaudeCompactWindow). A value the caller
+// already set is kept, and a warning goes to warn when it is above the window
+// harnez would set. When no threshold resolves (for example a config that sets
+// 0), the child gets environ unchanged, as the start path disables its
+// watchdog in that case.
 func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
 	prefix := claudeCompactWindowEnv + "="
-	if model.CompactTokens > 0 {
-		// --autocompact wins over any caller value: drop every caller copy so
-		// the one harnez sets is the only one Claude sees.
-		out := make([]string, 0, len(environ)+1)
-		differing := ""
-		for _, kv := range environ {
-			if strings.HasPrefix(kv, prefix) {
-				if v := strings.TrimPrefix(kv, prefix); v != strconv.Itoa(model.CompactTokens) {
-					differing = v
-				}
-				continue
-			}
-			out = append(out, kv)
-		}
-		if differing != "" && warn != nil {
-			fmt.Fprintf(warn, "harnez: %s=%s replaced by --autocompact %d for %s\n", claudeCompactWindowEnv, differing, model.CompactTokens, model.Spec())
-		}
-		return append(out, prefix+strconv.Itoa(model.CompactTokens))
-	}
 	threshold, err := CompactThreshold(model)
 	if err != nil {
 		// A zero threshold is an intentional opt-out: stay silent.
@@ -50,6 +33,32 @@ func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
 			fmt.Fprintf(warn, "harnez: no %s for %s: %v\n", claudeCompactWindowEnv, model.Spec(), err)
 		}
 		return environ
+	}
+	window, err := ClaudeCompactWindow(threshold)
+	if err != nil {
+		if warn != nil {
+			fmt.Fprintf(warn, "harnez: no %s for %s: %v\n", claudeCompactWindowEnv, model.Spec(), err)
+		}
+		return environ
+	}
+	if model.CompactTokens > 0 {
+		// --autocompact wins over any caller value: drop every caller copy so
+		// the one harnez sets is the only one Claude sees.
+		out := make([]string, 0, len(environ)+1)
+		differing := ""
+		for _, kv := range environ {
+			if strings.HasPrefix(kv, prefix) {
+				if v := strings.TrimPrefix(kv, prefix); v != strconv.Itoa(window) {
+					differing = v
+				}
+				continue
+			}
+			out = append(out, kv)
+		}
+		if differing != "" && warn != nil {
+			fmt.Fprintf(warn, "harnez: %s=%s replaced by %d (--autocompact %d) for %s\n", claudeCompactWindowEnv, differing, window, model.CompactTokens, model.Spec())
+		}
+		return append(out, prefix+strconv.Itoa(window))
 	}
 	// exec keeps the last duplicate, so the last value is the one Claude sees.
 	caller := ""
@@ -66,12 +75,25 @@ func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
 			if warn != nil {
 				fmt.Fprintf(warn, "harnez: %s=%q is not a number; Claude gets it unchanged\n", claudeCompactWindowEnv, caller)
 			}
-		case n > threshold && warn != nil:
-			fmt.Fprintf(warn, "harnez: %s=%d is above the compaction threshold %d for %s; Claude compacts at the caller value\n", claudeCompactWindowEnv, n, threshold, model.Spec())
+		case n > window && warn != nil:
+			fmt.Fprintf(warn, "harnez: %s=%d is above the window %d harnez sets for %s (threshold %d); Claude compacts at the caller value\n", claudeCompactWindowEnv, n, window, model.Spec(), threshold)
 		}
 		return environ
 	}
-	return append(append([]string(nil), environ...), prefix+strconv.Itoa(threshold))
+	return append(append([]string(nil), environ...), prefix+strconv.Itoa(window))
+}
+
+// ClaudeCompactWindow maps a harnez threshold to the CLAUDE_CODE_AUTO_COMPACT_WINDOW
+// value. Claude 2.1.330 compacts about 33k below the window it is given
+// (issue 1305 M0b), so the window is the threshold plus the spec offset; with
+// the shipped offset Claude compacts about 10k below the threshold, and the
+// harnez watchdog at the threshold stays the backstop (issue 1306).
+func ClaudeCompactWindow(threshold int) (int, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return 0, err
+	}
+	return threshold + spec.ClaudeCompactWindowOffset, nil
 }
 
 // claudeEnv is the environment for one Claude child of this process.

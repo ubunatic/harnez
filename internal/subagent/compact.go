@@ -128,7 +128,11 @@ func CompactWindowLine(model Model) string {
 	mechanism := "not passed to provider"
 	switch model.Provider {
 	case "claude":
-		mechanism = "env " + claudeCompactWindowEnv
+		window, err := ClaudeCompactWindow(n)
+		if err != nil {
+			return "unresolved: " + err.Error()
+		}
+		mechanism = fmt.Sprintf("env %s=%d", claudeCompactWindowEnv, window)
 	case "codex":
 		mechanism = "-c model_auto_compact_token_limit"
 	}

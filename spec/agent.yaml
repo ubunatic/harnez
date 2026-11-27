@@ -32,6 +32,12 @@ plan_fx:
 # session before the next prompt; model-specific values take precedence over global values,
 # and user configuration takes precedence over the spec at the same specificity.
 compact_threshold_tokens: 200000
+# Added to the threshold to form CLAUDE_CODE_AUTO_COMPACT_WINDOW for Claude
+# children. Claude 2.1.330 compacts about 33k below that window (issue 1305
+# M0b), so 23000 makes it compact about 10k below the harnez threshold (Haiku:
+# window 123000, compaction near 90k); the watchdog at the threshold is the
+# backstop. 0 passes the threshold unchanged (issue 1306).
+claude_compact_window_offset_tokens: 23000
 cost_check:
   cached_to_new_ratio: 20
   context_usage_fraction: 0.75
