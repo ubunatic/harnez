@@ -1,6 +1,6 @@
 # 1308 — usage history report: 5-hour share per session and a per-session factor that does not stop at 1 weekly pp
 
-**Status**: Open
+**Status**: In Progress — M0 delivered (host), M1 next
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -25,6 +25,31 @@ Rough count by the host (unverified, M0 measures it): over the window the 5-hour
 ### M0 — read-only measurement (no code)
 1. With the report's own sample handling (dedupe, reset tolerance, flicker), measure for the weekly window: 5-hour rise, weekly rise, their ratio overall and per 5-hour window (does the ratio vary by window or by hour?), up-step count, and how many 5-hour intervals contain calls from exactly one session.
 2. Verdict: is a 5-hour-based share precise enough to give a factor for sessions below 1 weekly pp? If the ratio varies a lot between 5-hour windows, say so; that changes M2.
+
+### M0 delivered (host, 2026-11-27, quota-history aggregates only, no transcripts)
+Paired Claude 5-hour and weekly samples from 2026-11-21 11:00 UTC, split at 5-hour resets (drop > 5 pp), running max per window:
+
+| 5h window (UTC) | 5h rise | weekly rise | ratio |
+|---|---|---|---|
+| 11-23 07:07-12:45 | 100 | 44 | 2.3 (anomaly, see below) |
+| 11-23 12:50-17:58 | 66 | 4 | 16.5 |
+| 11-23 18:00-11-24 15:59 | 100 | 6 | 16.7 |
+| 11-24 16:04-21:08 | 100 | 7 | 14.3 |
+| 11-24 21:13-11-25 12:39 | 18 | 1 | 18.0 |
+| 11-25 12:44-11-26 02:58 | 28 | 3 | 9.3 |
+| 11-26 03:03-12:09 | 46 | 5 | 9.2 |
+| 11-26 12:13-17:06 | 100 | 9 | 11.1 |
+| 11-26 17:11-22:16 | 22 | 1 | 22.0 |
+| 11-26 22:21-11-27 03:39 | 58 | 6 | 9.7 |
+| 11-27 03:44-13:46 | 37 | 4 | 9.2 |
+| 11-27 13:51-14:48 | 12 | 1 | 12.0 |
+
+- Total 687 / 91 = 7.55, but without the first window 587 / 47 = **12.5**. With weekly rise ≥ 4 pp per window the ratio is 9.2-16.7. One 5-hour pp is about 1/12 of a weekly pp, so a session needs about 0.08 weekly pp, not 1, for one 5-hour step.
+- The first window's 44 weekly pp are an artefact of this rough count (no samples 11-21 11:00 .. 11-23 07:07; the weekly value jumps from the baseline). The report's own handling (first sample as baseline, #1302 M5) must be used; the developer checks this case in a fixture.
+- Four windows hit 100 % (the 5-hour limit bound). Those windows are capped: usage beyond the cap was blocked, so the 5-hour rise there is a lower bound.
+- Windows with 1 weekly pp give ratios 12-22: quantization noise.
+
+**M0 verdict (host decision):** precise enough. M2 converts with the **range ratio** = Σ 5-hour rise ÷ Σ weekly rise over the 5-hour windows in range whose weekly rise is at least `usage_report.min_ratio_weekly_pct` (new spec key, start 4), never per window (too noisy at 1-4 weekly pp). Print the ratio and the window count used. Start `min_session_five_hour_pct` at 1 (one 5-hour step). The solo-interval count is measured after M1 on the installed binary.
 
 ### M1 — 5-hour share per session (Q2)
 - Run the same interval attribution on the Claude 5-hour window: resets every 5 hours are expected, not errors. Reuse the weekly code path; do not copy it.
