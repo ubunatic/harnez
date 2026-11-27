@@ -4,9 +4,53 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// claudeCompactWindowEnv is the Claude Code variable that sets its
+// auto-compaction window. harnez sets it on every Claude child to the
+// threshold it resolves for the child's model.
+const claudeCompactWindowEnv = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
+
+// claudeChildEnv returns environ with CLAUDE_CODE_AUTO_COMPACT_WINDOW set to
+// the harnez compaction threshold for model. A value the caller already set is
+// kept, and a warning goes to warn when it is above the threshold. When no
+// threshold resolves (for example a config that sets 0), the child gets
+// environ unchanged, as the start path disables its watchdog in that case.
+func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
+	threshold, err := CompactThreshold(model)
+	if err != nil {
+		if warn != nil {
+			fmt.Fprintf(warn, "harnez: no %s for %s: %v\n", claudeCompactWindowEnv, model.Spec(), err)
+		}
+		return environ
+	}
+	prefix := claudeCompactWindowEnv + "="
+	// exec keeps the last duplicate, so the last value is the one Claude sees.
+	caller := ""
+	found := false
+	for _, kv := range environ {
+		if strings.HasPrefix(kv, prefix) {
+			caller, found = strings.TrimPrefix(kv, prefix), true
+		}
+	}
+	if found {
+		if n, convErr := strconv.Atoi(caller); convErr == nil && n > threshold && warn != nil {
+			fmt.Fprintf(warn, "harnez: %s=%d is above the compaction threshold %d for %s; Claude compacts at the caller value\n", claudeCompactWindowEnv, n, threshold, model.Spec())
+		}
+		return environ
+	}
+	return append(append([]string(nil), environ...), prefix+strconv.Itoa(threshold))
+}
+
+// claudeEnv is the environment for one Claude child of this process.
+func claudeEnv(model Model) []string {
+	return claudeChildEnv(model, os.Environ(), os.Stderr)
+}
 
 // ClaudeDriver runs Claude Code in print mode.
 type ClaudeDriver struct {
@@ -14,20 +58,21 @@ type ClaudeDriver struct {
 	Dir     string
 }
 
-func (d ClaudeDriver) command(ctx context.Context, args ...string) ([]byte, error) {
-	return d.commandLines(ctx, nil, args...)
+func (d ClaudeDriver) command(ctx context.Context, env []string, args ...string) ([]byte, error) {
+	return d.commandLines(ctx, env, nil, args...)
 }
 
-func (d ClaudeDriver) commandLines(ctx context.Context, fn func([]byte), args ...string) ([]byte, error) {
-	return runProviderCLI(ctx, "claude", d.Dir, d.Command, fn, args)
+func (d ClaudeDriver) commandLines(ctx context.Context, env []string, fn func([]byte), args ...string) ([]byte, error) {
+	return runProviderCLI(ctx, "claude", d.Dir, env, d.Command, fn, args)
 }
 
 func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	if err := ValidateContextMode("claude", o.ContextMode); err != nil {
 		return nil, err
 	}
+	env := claudeEnv(o.Model)
 	start := time.Now()
-	b, err := d.command(ctx, claudeRunArgs(o.Model, o.Prompt, o.ContextMode)...)
+	b, err := d.command(ctx, env, claudeRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {
 		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
 			return nil, parseErr
@@ -42,7 +87,8 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 	return r, nil
 }
 func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
-	b, err := d.command(ctx, claudeResumeArgs(id, prompt, model)...)
+	env := claudeEnv(model)
+	b, err := d.command(ctx, env, claudeResumeArgs(id, prompt, model)...)
 	if err != nil {
 		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
 			return nil, parseErr
@@ -368,8 +414,9 @@ func (d ClaudeStreamDriver) RunStream(ctx context.Context, o RunOptions, fn Even
 	if err := ValidateContextMode("claude", o.ContextMode); err != nil {
 		return nil, err
 	}
+	env := claudeEnv(o.Model)
 	start := time.Now()
-	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeRunArgs(o.Model, o.Prompt, o.ContextMode)...)
+	b, err := d.commandLines(ctx, env, claudeLineFunc(fn), claudeRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {
 		return nil, claudeStopError(b, fmt.Errorf("claude: %w", err))
 	}
@@ -383,7 +430,8 @@ func (d ClaudeStreamDriver) RunStream(ctx context.Context, o RunOptions, fn Even
 
 // ResumeStream resumes a claude session and reports events while it runs.
 func (d ClaudeStreamDriver) ResumeStream(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
-	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeResumeArgs(id, prompt, model)...)
+	env := claudeEnv(model)
+	b, err := d.commandLines(ctx, env, claudeLineFunc(fn), claudeResumeArgs(id, prompt, model)...)
 	if err != nil {
 		return nil, claudeStopError(b, fmt.Errorf("claude resume: %w", err))
 	}

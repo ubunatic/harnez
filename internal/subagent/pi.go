@@ -46,7 +46,7 @@ func (d PiDriver) command(ctx context.Context, args ...string) ([]byte, error) {
 }
 
 func (d PiDriver) commandLines(ctx context.Context, fn func([]byte), args ...string) ([]byte, error) {
-	return runProviderCLI(ctx, "pi", d.Dir, d.Command, fn, args)
+	return runProviderCLI(ctx, "pi", d.Dir, nil, d.Command, fn, args)
 }
 
 func (d PiDriver) toolCallExtArgs() ([]string, error) {

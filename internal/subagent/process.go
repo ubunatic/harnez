@@ -107,10 +107,11 @@ func providerLines(ctx context.Context, cmd *exec.Cmd, fn func([]byte)) ([]byte,
 }
 
 // runProviderCLI runs the provider CLI name in dir and passes each stdout
-// line to fn as it arrives; a nil fn is the batch path. A command override
-// replaces the process and its output lines are replayed to fn. A non-zero
-// exit carries the trimmed stderr in the error.
-func runProviderCLI(ctx context.Context, name, dir string, override func(context.Context, string, ...string) ([]byte, error), fn func([]byte), args []string) ([]byte, error) {
+// line to fn as it arrives; a nil fn is the batch path. A nil env inherits the
+// process environment; otherwise env is the child's full environment. A command
+// override replaces the process and its output lines are replayed to fn. A
+// non-zero exit carries the trimmed stderr in the error.
+func runProviderCLI(ctx context.Context, name, dir string, env []string, override func(context.Context, string, ...string) ([]byte, error), fn func([]byte), args []string) ([]byte, error) {
 	if override != nil {
 		b, err := override(ctx, name, args...)
 		if fn != nil {
@@ -120,6 +121,9 @@ func runProviderCLI(ctx context.Context, name, dir string, override func(context
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if env != nil {
+		cmd.Env = env
+	}
 	return providerLines(ctx, cmd, fn)
 }
 

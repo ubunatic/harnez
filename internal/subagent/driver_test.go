@@ -820,7 +820,7 @@ func TestClaudeCommandUsesDirAndReturnsStderr(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	d := ClaudeDriver{Dir: work}
-	out, err := d.command(context.Background(), "-p")
+	out, err := d.command(context.Background(), nil, "-p")
 	if err == nil || !strings.Contains(err.Error(), "deliberate-error") {
 		t.Fatalf("error = %v, want stderr", err)
 	}
