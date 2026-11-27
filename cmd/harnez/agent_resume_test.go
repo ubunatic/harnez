@@ -695,7 +695,9 @@ func TestRunResumeBlocksPromptWhenCompactionIsUnverified(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte("agent:\n  compact_threshold_tokens: 100\n"), 0600); err != nil {
+	// The claude key beats the spec's claude default (issue 1307); the codex
+	// case still resolves the user global.
+	if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte("agent:\n  compact_threshold_tokens: 100\n  compact_thresholds:\n    claude: 100\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 

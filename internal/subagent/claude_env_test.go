@@ -48,7 +48,9 @@ func claudeEnvHome(t *testing.T, cfg string) {
 	}
 }
 
-var claudeEnvModel = Model{Provider: "claude", Name: "sonnet", Tier: "med"}
+// claudeEnvModel has no spec compact_thresholds key below the provider one, so
+// tests set its threshold through the user key claude:testmodel:med.
+var claudeEnvModel = Model{Provider: "claude", Name: "testmodel", Tier: "med"}
 
 // specWindowOffset is claude_compact_window_offset_tokens from the embedded spec.
 func specWindowOffset(t *testing.T) int {
@@ -72,8 +74,43 @@ func TestClaudeWindowAddsSpecOffset(t *testing.T) {
 	}
 }
 
+// The window never exceeds the spec maximum, the owner's 200k manual-session
+// net, even for a threshold at or above it (issue 1307).
+func TestClaudeWindowCappedAtSpecMax(t *testing.T) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		t.Fatal(err)
+	}
+	max := spec.ClaudeCompactWindowMax
+	for _, threshold := range []int{max - spec.ClaudeCompactWindowOffset + 1, max, 250000} {
+		if got, err := ClaudeCompactWindow(threshold); err != nil || got != max {
+			t.Fatalf("ClaudeCompactWindow(%d) = %d, %v; want cap %d", threshold, got, err, max)
+		}
+	}
+	if got, _ := ClaudeCompactWindow(max - spec.ClaudeCompactWindowOffset); got != max {
+		t.Fatalf("threshold exactly at cap-offset: got %d, want %d", got, max)
+	}
+}
+
+// Every shipped Claude model gets a window below the 200k net: Opus, Sonnet
+// and Fable resolve the spec claude key, Haiku its own keys (issue 1307).
+func TestShippedClaudeModelsWindowBelowNet(t *testing.T) {
+	claudeEnvHome(t, "")
+	for _, name := range []string{"opus", "sonnet", "fable", "haiku"} {
+		m := Model{Provider: "claude", Name: name, Tier: "med"}
+		threshold, err := CompactThreshold(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w, err := ClaudeCompactWindow(threshold)
+		if err != nil || w >= 200000 {
+			t.Fatalf("%s: threshold %d window %d, %v; want a window below 200000", name, threshold, w, err)
+		}
+	}
+}
+
 func TestClaudeChildGetsWindowOnStartAndResume(t *testing.T) {
-	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: 150000\n")
+	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:testmodel:med: 150000\n")
 	fakeClaudeWindow(t)
 	want := fmt.Sprintf("window=%d", 150000+specWindowOffset(t))
 	d := ClaudeDriver{Dir: t.TempDir()}
@@ -88,7 +125,7 @@ func TestClaudeChildGetsWindowOnStartAndResume(t *testing.T) {
 }
 
 func TestClaudeStreamChildGetsWindowOnStartAndResume(t *testing.T) {
-	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: 150000\n")
+	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:testmodel:med: 150000\n")
 	fakeClaudeWindow(t)
 	want := fmt.Sprintf("window=%d", 150000+specWindowOffset(t))
 	d := ClaudeStreamDriver{ClaudeDriver{Dir: t.TempDir()}}
@@ -104,7 +141,7 @@ func TestClaudeStreamChildGetsWindowOnStartAndResume(t *testing.T) {
 }
 
 func TestClaudeCallerWindowAboveThresholdIsKeptWithWarning(t *testing.T) {
-	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: 150000\n")
+	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:testmodel:med: 150000\n")
 	fakeClaudeWindow(t)
 	t.Setenv(claudeWindowVar, "200000")
 	r, err := ClaudeDriver{Dir: t.TempDir()}.Run(context.Background(), RunOptions{Model: claudeEnvModel, Prompt: "p"})
@@ -121,7 +158,7 @@ func TestClaudeCallerWindowAboveThresholdIsKeptWithWarning(t *testing.T) {
 }
 
 func TestClaudeCallerWindowBelowThresholdIsKeptSilently(t *testing.T) {
-	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: 150000\n")
+	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:testmodel:med: 150000\n")
 	fakeClaudeWindow(t)
 	t.Setenv(claudeWindowVar, "60000")
 	r, err := ClaudeDriver{Dir: t.TempDir()}.Run(context.Background(), RunOptions{Model: claudeEnvModel, Prompt: "p"})
@@ -144,7 +181,7 @@ func TestClaudeCallerWindowBelowThresholdIsKeptSilently(t *testing.T) {
 }
 
 func TestClaudeWindowUnderHundredKStillSet(t *testing.T) {
-	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: 80000\n")
+	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:testmodel:med: 80000\n")
 	fakeClaudeWindow(t)
 	r, err := ClaudeDriver{Dir: t.TempDir()}.Run(context.Background(), RunOptions{Model: claudeEnvModel, Prompt: "p"})
 	if want := fmt.Sprintf("window=%d", 80000+specWindowOffset(t)); err != nil || !strings.Contains(responseOf(r), want) {
@@ -153,7 +190,7 @@ func TestClaudeWindowUnderHundredKStillSet(t *testing.T) {
 }
 
 func TestClaudeChildEnvUnchangedWhenThresholdDisabled(t *testing.T) {
-	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:sonnet:med: 0\n")
+	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:testmodel:med: 0\n")
 	var warn bytes.Buffer
 	env := []string{"PATH=/bin"}
 	if got := claudeChildEnv(claudeEnvModel, env, &warn); len(got) != 1 || got[0] != "PATH=/bin" {
@@ -177,7 +214,7 @@ func TestClaudeChildEnvWarnsOnRealResolutionError(t *testing.T) {
 }
 
 func TestClaudeMalformedCallerWindowKeptWithWarning(t *testing.T) {
-	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: 150000\n")
+	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:testmodel:med: 150000\n")
 	var warn bytes.Buffer
 	env := []string{claudeWindowVar + "=abc"}
 	if got := claudeChildEnv(claudeEnvModel, env, &warn); len(got) != 1 || got[0] != claudeWindowVar+"=abc" {
@@ -189,7 +226,7 @@ func TestClaudeMalformedCallerWindowKeptWithWarning(t *testing.T) {
 }
 
 func TestPiChildEnvUnchanged(t *testing.T) {
-	claudeEnvHome(t, "agent:\n  compact_threshold_tokens: 150000\n")
+	claudeEnvHome(t, "agent:\n  compact_thresholds:\n    claude:testmodel:med: 150000\n")
 	fakeCLI(t, "pi", `printf 'pi-window=%s\n' "$CLAUDE_CODE_AUTO_COMPACT_WINDOW"`)
 	out, err := PiDriver{Dir: t.TempDir()}.command(context.Background(), "x")
 	if err != nil {

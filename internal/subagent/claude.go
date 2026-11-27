@@ -87,13 +87,19 @@ func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
 // value. Claude 2.1.330 compacts about 33k below the window it is given
 // (issue 1305 M0b), so the window is the threshold plus the spec offset; with
 // the shipped offset Claude compacts about 10k below the threshold, and the
-// harnez watchdog at the threshold stays the backstop (issue 1306).
+// harnez watchdog at the threshold stays the backstop (issue 1306). The window
+// never exceeds claude_compact_window_max_tokens (0: no cap), the owner's
+// manual-session safety net (issue 1307).
 func ClaudeCompactWindow(threshold int) (int, error) {
 	spec, err := agentSpecOnce()
 	if err != nil {
 		return 0, err
 	}
-	return threshold + spec.ClaudeCompactWindowOffset, nil
+	window := threshold + spec.ClaudeCompactWindowOffset
+	if spec.ClaudeCompactWindowMax > 0 {
+		window = min(window, spec.ClaudeCompactWindowMax)
+	}
+	return window, nil
 }
 
 // claudeEnv is the environment for one Claude child of this process.

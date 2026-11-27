@@ -26,7 +26,7 @@ func TestCompactThresholdDefaultGlobalAndOverride(t *testing.T) {
 	if err != nil || got != 175000 {
 		t.Fatalf("override threshold = %d, %v", got, err)
 	}
-	got, err = CompactThreshold(Model{Provider: "claude", Name: "sonnet"})
+	got, err = CompactThreshold(Model{Provider: "lmcoder", Name: "coder"})
 	if err != nil || got != 250000 {
 		t.Fatalf("global threshold = %d, %v", got, err)
 	}

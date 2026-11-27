@@ -40,6 +40,7 @@ type agentSpec struct {
 	ReplyHistoryLimit         int                            `yaml:"reply_history_limit"`
 	CompactThreshold          int                            `yaml:"compact_threshold_tokens"`
 	CompactThresholds         map[string]int                 `yaml:"compact_thresholds"`
+	ClaudeCompactWindowMax    int                            `yaml:"claude_compact_window_max_tokens"`
 	ClaudeCompactWindowOffset int                            `yaml:"claude_compact_window_offset_tokens"`
 	CostCheck                 CostCheckSpec                  `yaml:"cost_check"`
 	AutoCompact               AutoCompactSpec                `yaml:"auto_compact"`
@@ -262,6 +263,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if spec.ClaudeCompactWindowOffset < 0 {
 		return agentSpec{}, fmt.Errorf("agent spec: claude_compact_window_offset_tokens must not be negative")
+	}
+	if spec.ClaudeCompactWindowMax < 0 {
+		return agentSpec{}, fmt.Errorf("agent spec: claude_compact_window_max_tokens must not be negative")
 	}
 	for key, threshold := range spec.CompactThresholds {
 		if threshold <= 0 {

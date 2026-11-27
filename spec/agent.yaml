@@ -38,6 +38,10 @@ compact_threshold_tokens: 200000
 # window 123000, compaction near 90k); the watchdog at the threshold is the
 # backstop. 0 passes the threshold unchanged (issue 1306).
 claude_compact_window_offset_tokens: 23000
+# Upper bound for that window. The owner's Claude settings use 200000 as the
+# last safety net for manual sessions; harnez sessions never get a larger
+# window, whatever the threshold or --autocompact (issue 1307).
+claude_compact_window_max_tokens: 200000
 cost_check:
   cached_to_new_ratio: 20
   context_usage_fraction: 0.75
@@ -46,6 +50,9 @@ compact_thresholds:
   codex:gpt-6.1-terra: 200000
   codex:gpt-6.2-sol: 200000
   codex:gpt-6-luna: 100000
+  # Claude models without their own key: window 183000, native compaction
+  # near 150k, below the 200k manual-session net (issue 1307).
+  claude: 160000
   claude:haiku:low: 100000
   claude:haiku:med: 100000
   claude:haiku:high: 100000

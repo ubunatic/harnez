@@ -15,7 +15,8 @@ highest first:
 
 1. `--autocompact` on `harnez agent start` or `resume` (per run, stored on the session as `compact_tokens`).
 2. User `agent.compact_thresholds` in `~/.harnez/config.yaml`, then spec `compact_thresholds` in `spec/agent.yaml`
-   (keys: `<model spec>`, `<provider>:<model>`, `<provider>`). Spec Haiku is 100000.
+   (keys: `<model spec>`, `<provider>:<model>`, `<provider>`). Spec Haiku is 100000; spec `claude` (Opus, Sonnet,
+   Fable) is 160000, so a user global below does not apply to Claude; use a user `claude` key instead (1307).
 3. User `agent.compact_threshold_tokens`, then spec `compact_threshold_tokens` (200000).
 
 A value of 0 or below disables harnez's own compaction for that run (no error). A caller's
@@ -26,13 +27,14 @@ The threshold reaches each provider in one of two ways:
 
 | Provider | How the threshold reaches the CLI | Role of harnez's own check |
 | --- | --- | --- |
-| Claude | env `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<threshold + claude_compact_window_offset_tokens>` on the child (`claudeChildEnv`, harnez value last; spec offset 23000, so Haiku gets 123000) | **Backstop.** Claude compacts natively first, about 33k below the window (1305 M0b), so about 10k below the threshold (Haiku: near 90k, 1306). The pre-turn `/compact` and the stream watchdog at the threshold catch what it misses. |
+| Claude | env `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<threshold + claude_compact_window_offset_tokens>` on the child (`claudeChildEnv`, harnez value last; spec offset 23000, capped at `claude_compact_window_max_tokens` 200000, the owner's manual-session net; Haiku gets 123000, other Claude models 183000) | **Backstop.** Claude compacts natively first, about 33k below the window (1305 M0b), so about 10k below the threshold (Haiku: near 90k, 1306; others near 150k, below the 200k net's about 167k). The pre-turn `/compact` and the stream watchdog at the threshold catch what it misses. |
 | Codex | `-c model_auto_compact_token_limit=<threshold>` (`codex.go`) | **Primary.** Codex's own `-c` limit triggers its native compaction. Harnez's pre-turn `/compact` and the watchdog are **backstops** (the exact limit is unmeasured). |
 | Pi, lmcoder | not passed to the CLI. Harnez's checks are the pre-turn RPC `compact` command (`internal/subagent/pi.go`) and the `pi_compaction` spec settings (`small_window_threshold_tokens`, `reserve_fraction`, `keep_recent_fraction`). Pi's native behaviour here is **unverified**. | Only mechanism. `--autocompact` fails before launch for Pi and lmcoder, and for agy and Jules. |
 | agy, Jules | no native trigger; automatic compaction off | Off. `--autocompact` fails before launch. |
 
 Watchdog and pre-turn `/compact` use the same resolved threshold as the `-c` argument and the base of the Claude env,
-so a `--autocompact 120k` run is checked at 120000 everywhere and a Claude child gets a window of 143000.
+so a `--autocompact 120k` run is checked at 120000 everywhere and a Claude child gets a window of 143000. A threshold
+above 177000 still gets a window of only 200000 (the cap).
 
 Before each prompt, `harnez agent` compares the last turn's full input tokens with the threshold and sends `/compact`
 (591, `EnsureContextUnderThreshold`). The stream watchdog stops a turn that grows past it (592). Since 1264 the
