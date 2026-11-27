@@ -66,7 +66,7 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 	}
 	fmt.Fprintln(w, "legend: ATTRIB $ = API cost of calls in a quota rise (the factor's base); UNATTRIB $ = API $ - ATTRIB $ (quiet, before first sample, after an older window, pending); FACTOR = ATTRIB $ / plan net for the same quota %")
 	if rep.FiveHourIntervals > 0 {
-		fmt.Fprintln(w, "legend: 5H W-EQ % = 5-hour pp / range ratio (weekly-equivalent pp); 5H FACTOR = API $ / plan net for the W-EQ %; basis measured = most of the share came from calls alone in their rise, split = shared with other sessions or models")
+		fmt.Fprintln(w, "legend: 5H W-EQ % = 5-hour pp / range ratio (weekly-equivalent pp); 5H FACTOR = cost of the session's calls inside attributed 5-hour rises / plan net for the W-EQ %; basis measured = most of the share came from calls alone in their rise, split = shared with other sessions or models")
 	}
 	if len(rep.Intervals) == 0 {
 		fmt.Fprintln(w, "quota: no weekly history in range; quota, plan and factor are n/a")

@@ -318,8 +318,8 @@ The report also reads Claude's 5-hour window (`Session (5-hour)`) with the same
 rules: rises grouped by `reset_at`, interval attribution, quiet rises and not
 explained. A 5-hour reset every five hours is expected, not an error. Text
 columns: `QUOTA 5H %` is the session's attributed 5-hour pp; `5H W-EQ %` is its
-weekly-equivalent pp (5-hour pp divided by the range ratio); `5H FACTOR` is its
-API cost over the plan net of the W-EQ %. The JSON carries the same values as
+weekly-equivalent pp (5-hour pp divided by the range ratio); `5H FACTOR` is the cost of
+the session's calls inside attributed 5-hour rises, over the plan net of its W-EQ %. The JSON carries the same values as
 `five_hour_*` fields on sessions and the totals.
 
 Range ratio: Σ 5-hour pp ÷ Σ weekly pp over the 5-hour windows in range whose
