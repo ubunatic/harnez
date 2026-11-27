@@ -109,6 +109,8 @@ type TurnRecord struct {
 	// creation tokens (unknown stays unknown, never 0; ticket 1215).
 	CacheWriteTokens *int `json:"cache_write_tokens,omitempty"`
 	OutputTokens     int  `json:"output_tokens"`
+	// PeakContextTokens is the largest main-thread prompt of the turn (Claude only).
+	PeakContextTokens int `json:"peak_context_tokens,omitempty"`
 	// ReasoningTokens is nil when the provider did not report reasoning tokens
 	// (unknown), so a stored 0 always means a reported zero (ticket 1215).
 	ReasoningTokens              *int     `json:"reasoning_tokens,omitempty"`
@@ -148,6 +150,7 @@ func NewTurnRecord(turn int, r *TurnResult) TurnRecord {
 		calls := *r.ToolCalls
 		rec.ToolCalls = &calls
 	}
+	rec.PeakContextTokens = r.PeakContextTokens
 	rec.ToolCallLimit = r.ToolCallLimit
 	rec.ToolCallLimitReached = r.ToolCallLimitReached
 	return rec

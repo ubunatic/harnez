@@ -254,6 +254,15 @@ func tokenSummary(r *subagent.TurnResult, sess *subagent.Session) string {
 	return fmt.Sprintf("tokens: %s; %s", turnPart, sessPart)
 }
 
+// peakSummary names the largest main-thread prompt of the turn, when the
+// provider reports it (Claude).
+func peakSummary(r *subagent.TurnResult) string {
+	if r == nil || r.PeakContextTokens <= 0 {
+		return ""
+	}
+	return "peak context " + humanCount(r.PeakContextTokens)
+}
+
 func contextSummary(r *subagent.TurnResult, compactLimit int) string {
 	if r == nil || r.ContextTokens <= 0 {
 		return "context usage unknown"
@@ -272,6 +281,9 @@ func (t *turnStream) doneLineTail(r *subagent.TurnResult) string {
 	parts := []string{
 		tokenSummary(r, t.doneMeta.sess),
 		contextSummary(r, t.doneMeta.compactLimit),
+	}
+	if peak := peakSummary(r); peak != "" {
+		parts = append(parts, peak)
 	}
 	if r != nil && r.ToolCallLimit > 0 && r.ToolCalls != nil {
 		tc := fmt.Sprintf("tool calls: %d/%d", *r.ToolCalls, r.ToolCallLimit)

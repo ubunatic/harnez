@@ -758,9 +758,9 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	}
 	ctx = observeSessionProcess(ctx, s, id, nil)
 	driver := withAgyMeterSession(baseDriver, id)
-	// Claude streams on the non-JSON path even without a tool limit, so the
-	// token watchdog sees live usage (ticket 1264 M1). --json stays batch until M2.
-	if tcGuard != nil || (m.Provider == "claude" && !req.JSON) {
+	// Claude streams on every path, --json and detached included, so the token
+	// watchdog sees live usage (ticket 1264 M1, M2).
+	if tcGuard != nil || m.Provider == "claude" {
 		driver = asStreamingDriverForToolLimit(driver)
 	}
 	if tcGuard != nil && tcGuard.isPi {
@@ -769,7 +769,8 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	}
 	sd, canStream := driver.(subagent.StreamingDriver)
 	streaming := canStream && !req.JSON
-	useStream := canStream && (streaming || tcGuard != nil)
+	// Claude streams on --json too, so the watchdog covers it (ticket 1264 M2).
+	useStream := canStream && (streaming || tcGuard != nil || m.Provider == "claude")
 	turn := 1
 	turnStarted := time.Now().UTC()
 	quotaUnknown := warnModelQuota(cmd, d.availability, m.Provider, m.Name, turnStarted.Local())
@@ -805,7 +806,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 					_ = s.Save(sess)
 				}
 			}
-			if streaming && thresholdErr == nil {
+			if thresholdErr == nil {
 				if tokens, crossed := watchdog.Observe(ev); crossed {
 					watchdogCrossed = true
 					observedTokens = tokens
@@ -860,6 +861,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 					ts.abort()
 				}
 				if watchdogCrossed {
+					stopErr := fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session %q can be resumed", spec, observedTokens, threshold, sessName)
 					providerSessionID := observedSessionID
 					if providerSessionID != "" {
 						if req.SessionID != "" {
@@ -880,11 +882,17 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 						// The resume gate reads ContextTokens; store the crossing so it compacts first (1264 M1).
 						sess.ContextTokens = observedTokens
 						subagent.SyncCodexRolloutTotals(sess)
+						meterStoppedTurn(d, sess, turn, partialTurn(err), beforeCapture, turnStarted)
 						if saveErr := s.Save(sess); saveErr != nil {
 							return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
 						}
+						if req.JSON {
+							if encErr := writeStoppedAgentOutput(cmd, sess, partialTurn(err)); encErr != nil {
+								return encErr
+							}
+						}
 					}
-					return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session %q can be resumed", spec, observedTokens, threshold, sessName)
+					return stopErr
 				}
 			}
 		}
@@ -981,6 +989,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		ToolCalls:            r.ToolCalls,
 		ToolCallLimit:        r.ToolCallLimit,
 		ToolCallLimitReached: r.ToolCallLimitReached,
+		PeakContextTokens:    r.PeakContextTokens,
 	}
 	if streaming {
 		ts.doneMeta = buildTurnDoneMeta(sess, quotaUnknown)
@@ -1136,8 +1145,8 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return fmt.Errorf("agent resume %q preflight: %w", sess.Name, err)
 		}
 		driver = withAgyMeterSession(baseDriver, sess.ID)
-		// Claude streams on the non-JSON path so the token watchdog sees live usage (ticket 1264 M1).
-		if tcGuard != nil || (model.Provider == "claude" && !req.JSON) {
+		// Claude streams on every path so the token watchdog sees live usage (ticket 1264 M1, M2).
+		if tcGuard != nil || model.Provider == "claude" {
 			driver = asStreamingDriverForToolLimit(driver)
 		}
 		if tcGuard != nil && tcGuard.isPi {
@@ -1218,7 +1227,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	var r *subagent.TurnResult
 	sd, canStream := driver.(subagent.StreamingDriver)
 	streaming := canStream && !req.JSON
-	useStream := canStream && (streaming || tcGuard != nil)
+	useStream := canStream && (streaming || tcGuard != nil || model.Provider == "claude")
 	turn := sess.Turn + 1
 	// resumeTurn resumes the provider session natively (no history replay);
 	// a verified stale one starts a new session with the same prompt (issue 791).
@@ -1299,12 +1308,10 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			if ev.Kind == "session" {
 				observedSessionID = ev.Text
 			}
-			if streaming {
-				if tokens, crossed := watchdog.Observe(ev); crossed {
-					watchdogCrossed = true
-					observedTokens = tokens
-					cancelWatch()
-				}
+			if tokens, crossed := watchdog.Observe(ev); crossed {
+				watchdogCrossed = true
+				observedTokens = tokens
+				cancelWatch()
 			}
 			if tcGuard != nil && tcGuard.observe(ev) {
 				cancelWatch()
@@ -1342,8 +1349,15 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 					sess.LastActiveAt = time.Now()
 					sess.ContextTokens = observedTokens // the resume gate compacts before the next prompt (1264 M1)
 					subagent.SyncCodexRolloutTotals(sess)
+					sess.Turn = turn
+					meterStoppedTurn(d, sess, turn, partialTurn(err), beforeCapture, turnStarted)
 					if saveErr := s.Save(sess); saveErr != nil {
 						return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", sess.Name, observedTokens, threshold, saveErr)
+					}
+					if req.JSON {
+						if encErr := writeStoppedAgentOutput(cmd, sess, partialTurn(err)); encErr != nil {
+							return encErr
+						}
 					}
 					return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session can be resumed", sess.Name, observedTokens, threshold)
 				}
@@ -1447,17 +1461,8 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		sess.ReasoningTokensTotal = r.CumulativeReasoningTokens
 		sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
 		sess.TokenTotalsKnown = true
-	} else if !r.TurnTokensUnknown {
-		sess.TokensTurn = r.TokensTurn
-		sess.TokensCumulative += r.TokensTurn
-		sess.ReasoningTokensTotal += r.ReasoningTokens
-		sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
-		sess.InputTokensTotal += r.InputTokens
-		sess.CachedTokensTotal += r.CachedTokens
-		sess.CacheWriteTokensTotal += r.CacheWriteTokens
-		sess.CacheWriteTokensKnown = sess.CacheWriteTokensKnown && r.CacheWriteTokensKnown
-		sess.OutputTokensTotal += r.OutputTokens
-		sess.TokenTotalsKnown = true
+	} else {
+		addTurnTotals(sess, r)
 	}
 	sess.TokensSinceCompact += subagent.CompactionTokens(r)
 	sess.ContextTokens = r.ContextTokens
@@ -1505,6 +1510,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		ToolCalls:            r.ToolCalls,
 		ToolCallLimit:        r.ToolCallLimit,
 		ToolCallLimitReached: r.ToolCallLimitReached,
+		PeakContextTokens:    r.PeakContextTokens,
 	}
 	if !resumed {
 		out.Resumed, out.PreviousSessionID, out.Note = &resumed, previousID, freshNote
@@ -1531,6 +1537,64 @@ func writeAgentOutput(cmd *cobra.Command, jsonOut bool, v agentOutput) error {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(v)
 	}
 	return printAgentMessages(cmd, v.Messages, v.Response)
+}
+
+// writeStoppedAgentOutput prints the one JSON document of a --json turn the
+// token watchdog stopped: the stopped session and the peak the turn reached
+// before the kill (ticket 1264 M2). The message goes to stderr via the error.
+func writeStoppedAgentOutput(cmd *cobra.Command, sess *subagent.Session, partial *subagent.TurnResult) error {
+	out := agentOutput{Session: sess, ReconnectCmd: "harnez agent resume " + sess.ID + " \"<prompt>\""}
+	if partial != nil {
+		out.PeakContextTokens = partial.PeakContextTokens
+	}
+	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+}
+
+// partialTurn returns the usage a turn reported before the watchdog killed it,
+// or nil when err carries none (ticket 1264 M2).
+func partialTurn(err error) *subagent.TurnResult {
+	var partialErr *subagent.PartialTurnError
+	if errors.As(err, &partialErr) {
+		return partialErr.Partial
+	}
+	return nil
+}
+
+// meterStoppedTurn records what a watchdog-stopped turn consumed before the
+// kill: its quota readings always, and a turn record with the Claude totals
+// when the stream reported calls (ticket 1264 M2). Call it before the session
+// is saved; sess.Turn must already be turn.
+func meterStoppedTurn(d agentDeps, sess *subagent.Session, turn int, partial *subagent.TurnResult, beforeCapture <-chan usage.TurnQuotaReading, turnStarted time.Time) {
+	before := <-beforeCapture
+	baselineCacheAt := turnQuotaBaseline(turnStarted, before)
+	storeTurnQuota(d.dbPath, sess.ID, sess.Provider, turn, "before", before)
+	after := recordTurnQuota(d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt)
+	if partial == nil || len(partial.RequestUsage) == 0 {
+		return
+	}
+	sess.TurnRecords = append(sess.TurnRecords, subagent.NewTurnRecord(turn, partial))
+	addTurnTotals(sess, partial)
+	sess.TokensSinceCompact += subagent.CompactionTokens(partial)
+	populateTurnCostRecord(d.dbPath, sess, turn, partial, before, after)
+	persistAgentTurnTokens(d.dbPath, sess, partial, time.Now())
+}
+
+// addTurnTotals adds a turn's token counts to the session totals for providers
+// that report per-turn counts. The Codex cumulative branch stays with its caller.
+func addTurnTotals(sess *subagent.Session, r *subagent.TurnResult) {
+	if r.TurnTokensUnknown {
+		return
+	}
+	sess.TokensTurn = r.TokensTurn
+	sess.TokensCumulative += r.TokensTurn
+	sess.ReasoningTokensTotal += r.ReasoningTokens
+	sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
+	sess.InputTokensTotal += r.InputTokens
+	sess.CachedTokensTotal += r.CachedTokens
+	sess.CacheWriteTokensTotal += r.CacheWriteTokens
+	sess.CacheWriteTokensKnown = sess.CacheWriteTokensKnown && r.CacheWriteTokensKnown
+	sess.OutputTokensTotal += r.OutputTokens
+	sess.TokenTotalsKnown = true
 }
 
 func recordAgentReply(sess *subagent.Session, turn int, response string, messages []string, at time.Time) error {

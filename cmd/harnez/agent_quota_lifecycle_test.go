@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -46,6 +47,7 @@ func TestAgentEarlyReturnJoinsQuotaCapture(t *testing.T) {
 				t.Fatal(err)
 			}
 			started, finished := make(chan struct{}), make(chan struct{})
+			var quotaCalls atomic.Int32
 			driver := &quotaExitDriver{captureStarted: started}
 			old := agentDriver
 			agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
@@ -57,6 +59,12 @@ func TestAgentEarlyReturnJoinsQuotaCapture(t *testing.T) {
 					return s.Find(id)
 				},
 				quota: func(ctx context.Context, _ string, _ bool) usage.TurnQuotaReading {
+					// Only the turn-start capture blocks. A watchdog stop also
+					// takes an "after" reading (ticket 1264 M2) that must not
+					// close the channels a second time.
+					if quotaCalls.Add(1) > 1 {
+						return usage.TurnQuotaReading{}
+					}
 					close(started)
 					<-ctx.Done()
 					defer close(finished)

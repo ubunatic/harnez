@@ -115,13 +115,14 @@ func TestClaudeWatchdogDoesNotStopBelowOrWithoutLiveUsage(t *testing.T) {
 			stream: claudeLiveStream(claudeLiveInit(), claudeLiveAssistant("msg_a", 99999, "null"), claudeLiveResult(99999)),
 		},
 		{
-			// Repeated lines for one message id carry the same prompt; they must not add up.
+			// Repeated lines for one message id carry the same prompt; three
+			// lines at 40k must not add up to a 120k crossing.
 			name: "one message id repeated",
 			stream: claudeLiveStream(claudeLiveInit(),
-				claudeLiveAssistant("msg_rep", 60000, "null"),
-				claudeLiveAssistant("msg_rep", 60000, "null"),
-				claudeLiveAssistant("msg_rep", 60000, "null"),
-				claudeLiveResult(60000)),
+				claudeLiveAssistant("msg_rep", 40000, "null"),
+				claudeLiveAssistant("msg_rep", 40000, "null"),
+				claudeLiveAssistant("msg_rep", 40000, "null"),
+				claudeLiveResult(40000)),
 		},
 		{
 			// The result usage sums every call of the turn; it is not a live prompt size.

@@ -356,6 +356,9 @@ type TurnResult struct {
 	// including cached input. It measures the full context the model read.
 	ContextTokens     int `json:"context_tokens"`
 	ContextWindowSize int `json:"context_window_size,omitempty"`
+	// PeakContextTokens is the largest prompt of a main-thread call in the turn
+	// (Claude only). ContextTokens is the last call's prompt, which can be lower.
+	PeakContextTokens int `json:"peak_context_tokens,omitempty"`
 	// CompactionObserved reports a new provider compaction record during this turn.
 	CompactionObserved         bool `json:"compaction_observed,omitempty"`
 	ContextTokensBeforeCompact int  `json:"context_tokens_before_compact,omitempty"`

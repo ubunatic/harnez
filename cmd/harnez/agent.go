@@ -45,6 +45,8 @@ type agentOutput struct {
 	ToolCalls            *int   `json:"tool_calls,omitempty"`
 	ToolCallLimit        int    `json:"tool_call_limit,omitempty"`
 	ToolCallLimitReached bool   `json:"tool_call_limit_reached,omitempty"`
+	// PeakContextTokens is the largest main-thread prompt of this turn (Claude).
+	PeakContextTokens int `json:"peak_context_tokens,omitempty"`
 }
 
 // MarshalJSON keeps the session's own JSON (its MarshalJSON is promoted and
@@ -58,7 +60,7 @@ func (o agentOutput) MarshalJSON() ([]byte, error) {
 	} else {
 		base, err = json.Marshal(struct{}{})
 	}
-	if err != nil || (o.Resumed == nil && o.ToolCalls == nil && o.ToolCallLimit == 0 && !o.ToolCallLimitReached) {
+	if err != nil || (o.Resumed == nil && o.ToolCalls == nil && o.ToolCallLimit == 0 && !o.ToolCallLimitReached && o.PeakContextTokens == 0) {
 		return base, err
 	}
 	extra, err := json.Marshal(struct {
@@ -68,7 +70,8 @@ func (o agentOutput) MarshalJSON() ([]byte, error) {
 		ToolCalls            *int   `json:"tool_calls,omitempty"`
 		ToolCallLimit        int    `json:"tool_call_limit,omitempty"`
 		ToolCallLimitReached bool   `json:"tool_call_limit_reached,omitempty"`
-	}{o.Resumed, o.PreviousSessionID, o.Note, o.ToolCalls, o.ToolCallLimit, o.ToolCallLimitReached})
+		PeakContextTokens    int    `json:"peak_context_tokens,omitempty"`
+	}{o.Resumed, o.PreviousSessionID, o.Note, o.ToolCalls, o.ToolCallLimit, o.ToolCallLimitReached, o.PeakContextTokens})
 	if err != nil {
 		return nil, err
 	}

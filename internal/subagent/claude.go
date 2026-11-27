@@ -191,23 +191,29 @@ type claudeEvent struct {
 	} `json:"compact_metadata"`
 }
 
-// parseClaude reads Claude's stream-json output (one event per line) or a
-// single --output-format json object. The result's usage totals every model
-// call of the turn, so the context usage comes from the last main-thread
-// assistant call, or from a compact boundary's post_tokens; when neither is
-// present it is unknown (-1), as for agy (issues 644, 673).
-func parseClaude(data []byte) (*TurnResult, error) {
-	var res *claudeEvent
-	var last *claudeUsage
-	postCompact := -1
-	preCompact := 0
-	var localOut []string
+// claudeScan is what one pass over Claude's stream-json output yields. The full
+// parse needs the result line; the partial parse of a stopped turn does not.
+type claudeScan struct {
+	res         *claudeEvent
+	last        *claudeUsage
+	postCompact int
+	preCompact  int
+	localOut    []string
+	// calls holds one entry per API call, sub-agent calls included, as the
+	// result usage totals them.
+	calls     []RequestUsage
+	mainModel string
+	// peak is the largest main-chain prompt seen in the scan, in tokens.
+	peak int
+}
+
+// scanClaude walks the lines. Strict mode fails on a truncated JSON object;
+// lenient mode skips it, because a stopped turn can end in the middle of a line.
+func scanClaude(data []byte, lenient bool) (claudeScan, error) {
+	sc := claudeScan{postCompact: -1}
 	// One API call streams as several assistant events that repeat its usage;
 	// the last event of each message id is its final usage (ticket 1301).
-	var calls []RequestUsage
 	callIndex := map[string]int{}
-	// mainModel is the model id of the last main-chain call (ticket 1301 M4).
-	var mainModel string
 	for lineNo, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -215,8 +221,8 @@ func parseClaude(data []byte) (*TurnResult, error) {
 		}
 		var e claudeEvent
 		if err := json.Unmarshal([]byte(line), &e); err != nil {
-			if strings.HasPrefix(line, "{") && !strings.HasSuffix(line, "}") {
-				return nil, fmt.Errorf("parse claude json: %w", err)
+			if strings.HasPrefix(line, "{") && !strings.HasSuffix(line, "}") && !lenient {
+				return claudeScan{}, fmt.Errorf("parse claude json: %w", err)
 			}
 			continue
 		}
@@ -230,36 +236,69 @@ func parseClaude(data []byte) (*TurnResult, error) {
 				}
 				req := u.requestUsage(e.Message.Model)
 				if idx, seen := callIndex[key]; seen {
-					calls[idx] = req
+					sc.calls[idx] = req
 				} else {
-					callIndex[key] = len(calls)
-					calls = append(calls, req)
+					callIndex[key] = len(sc.calls)
+					sc.calls = append(sc.calls, req)
 				}
 			}
 			// Synthetic events after /compact carry all-zero usage; skip them.
 			if e.Parent == nil && u.Input+u.CacheRead+u.CacheCreate > 0 {
-				last = u
+				sc.last = u
+				sc.peak = max(sc.peak, u.Input+u.CacheRead+u.CacheCreate)
 				if e.Message.Model != "" {
-					mainModel = e.Message.Model
+					sc.mainModel = e.Message.Model
 				}
 			}
 		case e.Type == "system" && e.Subtype == "compact_boundary" && e.Compact.PostTokens > 0:
-			postCompact = e.Compact.PostTokens
-			preCompact = e.Compact.PreTokens
-			last = nil
+			sc.postCompact = e.Compact.PostTokens
+			sc.preCompact = e.Compact.PreTokens
+			sc.last = nil
 		case e.Type == "user":
 			// A local command such as /compact reports only here, not in result.
 			var text string
 			if json.Unmarshal(e.Message.Content, &text) == nil {
 				if _, rest, ok := strings.Cut(text, "<local-command-stdout>"); ok {
 					out, _, _ := strings.Cut(rest, "</local-command-stdout>")
-					localOut = append(localOut, strings.TrimSpace(out))
+					sc.localOut = append(sc.localOut, strings.TrimSpace(out))
 				}
 			}
 		case e.Type == "result" || e.Type == "":
-			res = &e
+			sc.res = &e
 		}
 	}
+	return sc, nil
+}
+
+// fill sets the call, model, compaction and context fields of r from the scan.
+// The context is the last main-thread assistant call, or a compact boundary's
+// post_tokens; when neither is present it is unknown (-1), as for agy (issues 644, 673).
+func (sc claudeScan) fill(r *TurnResult) {
+	r.RequestUsage = sc.calls
+	r.Model = sc.mainModel
+	r.CompactionObserved = sc.postCompact > 0
+	r.ContextTokensBeforeCompact = sc.preCompact
+	r.ContextTokens = -1
+	if sc.last != nil {
+		r.ContextTokens = sc.last.Input + sc.last.CacheRead + sc.last.CacheCreate
+	} else if sc.postCompact > 0 {
+		r.ContextTokens = sc.postCompact
+	}
+	r.PeakContextTokens = sc.peak
+	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens + r.ReasoningTokens
+	r.TokensCumulative = r.TokensTurn
+}
+
+// parseClaude reads Claude's stream-json output (one event per line) or a
+// single --output-format json object. The result's usage totals every model
+// call of the turn, so the context usage comes from the last main-thread
+// assistant call (see fill).
+func parseClaude(data []byte) (*TurnResult, error) {
+	sc, err := scanClaude(data, false)
+	if err != nil {
+		return nil, err
+	}
+	res := sc.res
 	if res == nil {
 		return nil, fmt.Errorf("parse claude json: no result event")
 	}
@@ -272,20 +311,48 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	}
 	v := res.Usage
 	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate, CacheWriteTokens: v.CacheCreate, CacheWriteTokensKnown: true}
-	r.RequestUsage = calls
-	r.Model = mainModel
-	r.CompactionObserved = postCompact > 0
-	r.ContextTokensBeforeCompact = preCompact
-	r.Messages = append(r.Messages, localOut...)
-	r.ContextTokens = -1
-	if last != nil {
-		r.ContextTokens = last.Input + last.CacheRead + last.CacheCreate
-	} else if postCompact > 0 {
-		r.ContextTokens = postCompact
-	}
-	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens + r.ReasoningTokens
-	r.TokensCumulative = r.TokensTurn
+	sc.fill(r)
+	r.Messages = append(r.Messages, sc.localOut...)
 	return r, nil
+}
+
+// parseClaudePartial builds the turn of a run that was stopped before its
+// result line (ticket 1264 M2). Its totals are the sums over the calls that
+// finished, and a truncated last line is skipped. It always returns a result;
+// the caller writes a turn record only when RequestUsage is not empty.
+func parseClaudePartial(data []byte) *TurnResult {
+	sc, _ := scanClaude(data, true) // lenient mode does not fail
+	r := &TurnResult{CacheWriteTokensKnown: true}
+	for _, c := range sc.calls {
+		r.InputTokens += c.Input
+		r.OutputTokens += c.Output
+		r.CachedTokens += c.CacheRead + c.CacheWriteTotal
+		r.CacheWriteTokens += c.CacheWriteTotal
+	}
+	sc.fill(r)
+	return r
+}
+
+// PartialTurnError is a turn whose command failed before its result line, for
+// example when the token watchdog killed it. Partial holds the usage of the
+// calls that finished, so the caller can meter the turn. Error and Unwrap
+// are those of Err.
+type PartialTurnError struct {
+	Err     error
+	Partial *TurnResult
+}
+
+func (e *PartialTurnError) Error() string { return e.Err.Error() }
+func (e *PartialTurnError) Unwrap() error { return e.Err }
+
+// claudeStopError is the error of a run whose command failed. A reported
+// error (is_error, a failed /compact) is returned as is. Any other failure
+// carries the partial turn from the output read so far.
+func claudeStopError(b []byte, err error) error {
+	if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
+		return parseErr
+	}
+	return &PartialTurnError{Err: err, Partial: parseClaudePartial(b)}
 }
 
 var _ Driver = ClaudeDriver{}
@@ -304,10 +371,7 @@ func (d ClaudeStreamDriver) RunStream(ctx context.Context, o RunOptions, fn Even
 	start := time.Now()
 	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeRunArgs(o.Model, o.Prompt, o.ContextMode)...)
 	if err != nil {
-		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
-			return nil, parseErr
-		}
-		return nil, fmt.Errorf("claude: %w", err)
+		return nil, claudeStopError(b, fmt.Errorf("claude: %w", err))
 	}
 	r, err := parseClaude(b)
 	if err != nil {
@@ -321,10 +385,7 @@ func (d ClaudeStreamDriver) RunStream(ctx context.Context, o RunOptions, fn Even
 func (d ClaudeStreamDriver) ResumeStream(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
 	b, err := d.commandLines(ctx, claudeLineFunc(fn), claudeResumeArgs(id, prompt, model)...)
 	if err != nil {
-		if _, parseErr := parseClaude(b); parseErr != nil && (strings.Contains(parseErr.Error(), "claude reported an error:") || strings.HasPrefix(parseErr.Error(), "claude: ")) {
-			return nil, parseErr
-		}
-		return nil, fmt.Errorf("claude resume: %w", err)
+		return nil, claudeStopError(b, fmt.Errorf("claude resume: %w", err))
 	}
 	return parseClaude(b)
 }
