@@ -42,15 +42,20 @@ permanently, so it can serve the board.
 
 - 2026-11-27, owner: start a web server in the collector for interactive dashboards. This
   supersedes #720's "datavis leaves harnez" for usage dashboards; #720 keeps the rest.
-- Open (security, owner confirms before M1 writes): TCP listener off by default, bound to
-  127.0.0.1 only, with a per-start random token in the URL (or Unix-socket-only plus a
-  `harnez usage web` local proxy). Proposed default: 127.0.0.1 + token. Unverified alternative.
+- 2026-11-27, owner (security): full read access from the local network by default, no token.
+  Nothing to hide from other local machines. The listen address and port live in `spec/` (default
+  all interfaces), and the user's local.yaml can narrow them (for example to 127.0.0.1).
+  - Allowed: session names and ids, numbers (tokens, cost, context, quota), project and repo
+    names, models, sources, timestamps, compaction marks and similar metadata.
+  - Never served: full session logs, meaning prompt and response text, tool inputs and outputs,
+    `compact_summary` and `custom_instructions`. A test asserts the API payloads have no such fields.
+  - The API stays read-only: no write or shutdown routes on the TCP listener.
 
 ## 3. Implementation & Verification Plan
 
 /goal The collector serves a local interactive usage board with per-call charts and filters,
 verified live against d957448b ($2.47, 168 calls, two compactions); or stop and report when
-blocked on the listener security decision, a denied permission, or no progress (circuit breaker:
+blocked on an owner decision, a denied permission, or no progress (circuit breaker:
 clear the goal and write a failure report here).
 
 Check live code first; this ticket may be stale.
@@ -58,11 +63,11 @@ Check live code first; this ticket may be stale.
 - **M1 (data API):** `GET /api/usage/sessions` (list + filters) and
   `GET /api/usage/sessions/<id>/calls` (per-call series: t, model, input, output, cache read,
   cache write 5m/1h, prompt size, cost, cumulative cost, context, compaction marks) from
-  usagereport. Tests on fake transcripts in t.TempDir; golden JSON; the sum of call costs equals
+  usagereport, plus session name and project. Tests on fake transcripts in t.TempDir; golden JSON; the sum of call costs equals
   the report's session cost; no text fields in the payload (test).
-- **M2 (listener + board shell):** spec-driven TCP listener per the Decision; embedded board
-  page with session table and filters; one chart (cost). Tests: off by default, 127.0.0.1 bind,
-  token required.
+- **M2 (listener + board shell):** spec-driven TCP listener per the Decision (LAN, read-only); embedded board
+  page with session table and filters; one chart (cost). Tests: spec address used, local.yaml
+  override narrows it, no write routes on TCP, no log text in payloads.
 - **M3 (stacked charts):** context, prompt size, token types on a shared axis; draggable range
   that filters all charts and the table.
 - **M4 (quota):** weekly and 5h quota lines aligned under the charts; range covers several sessions.
