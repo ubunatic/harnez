@@ -1,6 +1,6 @@
 # 1307 — Claude harnez sessions stay below the owner's 200k manual net: cap and claude default threshold
 
-**Status**: In Progress
+**Status**: Closed — Window capped at claude_compact_window_max_tokens 200000; spec claude key 160000. Installed --dry-run: opus/sonnet/fable 160000 -> env 183000, haiku 100000 -> 123000, opus --autocompact 250k -> 200000. make test-q1 green (83 packages).
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
