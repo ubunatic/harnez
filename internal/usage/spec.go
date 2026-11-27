@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/fs"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +19,7 @@ import (
 const usageSpecPath = "spec/usage.yaml"
 
 type usageSpec struct {
+	ClaudeConfigDirs         []string           `yaml:"claude_config_dirs"`
 	DebugLabels              usageDebugLabels   `yaml:"debug_labels"`
 	AGYQuota                 agyQuotaSpec       `yaml:"agy_quota"`
 	WatchLoadingLabel        string             `yaml:"watch_loading_label"`
@@ -96,6 +99,54 @@ type usageReportSpec struct {
 	MinLocalFactor          *float64 `yaml:"min_local_factor"`
 	MinRatioWeeklyPct       *float64 `yaml:"min_ratio_weekly_pct"`
 	MinSessionFiveHourPct   *float64 `yaml:"min_session_five_hour_pct"`
+}
+
+// ClaudeConfigDirs returns the Claude config directories from spec/usage.yaml,
+// replaced by ~/.config/harnez/local.yaml usage.claude_config_dirs when non-empty.
+// Leading ~ is expanded against os.UserHomeDir(). An empty list falls back to
+// the spec default.
+func ClaudeConfigDirs() ([]string, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return nil, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return nil, err
+	}
+	if len(spec.ClaudeConfigDirs) == 0 {
+		return nil, fmt.Errorf("claude_config_dirs is missing from %s", usageSpecPath)
+	}
+	raw := spec.ClaudeConfigDirs
+	cfg, _, err := LoadLocalConfig("")
+	if err != nil {
+		return nil, err
+	}
+	if cfg != nil && len(cfg.Usage.ClaudeConfigDirs) > 0 {
+		raw = cfg.Usage.ClaudeConfigDirs
+	}
+	home, homeErr := os.UserHomeDir()
+	expand := func(list []string) []string {
+		out := make([]string, 0, len(list))
+		for _, p := range list {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if p == "~" && homeErr == nil {
+				p = home
+			} else if strings.HasPrefix(p, "~/") && homeErr == nil {
+				p = filepath.Join(home, p[2:])
+			}
+			out = append(out, filepath.Clean(p))
+		}
+		return out
+	}
+	out := expand(raw)
+	if len(out) == 0 {
+		out = expand(spec.ClaudeConfigDirs)
+	}
+	return out, nil
 }
 
 // ReportFiveHourSpec returns usage_report.min_ratio_weekly_pct and

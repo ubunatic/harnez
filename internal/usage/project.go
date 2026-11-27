@@ -55,14 +55,17 @@ func CollectProjectUsage(repoPath string) (*ProjectUsageResult, error) {
 	repoName := filepath.Base(absPath)
 
 	home, _ := os.UserHomeDir()
-	claudeDir := filepath.Join(home, ".claude")
+	claudeDirs, err := ClaudeConfigDirs()
+	if err != nil {
+		return nil, err
+	}
 	geminiDir := filepath.Join(home, ".gemini", "antigravity-cli")
 	codexDir := filepath.Join(home, ".codex")
 
 	agents := make(map[string]*AgentProjectAttribution)
 
 	// 1. Claude attribution
-	claudeAttr := scanClaudeProjectUsage(claudeDir, absPath)
+	claudeAttr := scanClaudeProjectUsageDirs(claudeDirs, absPath)
 	if claudeAttr != nil && (claudeAttr.Tokens.TotalTokens > 0 || claudeAttr.MatchedSessions > 0) {
 		agents["claude"] = claudeAttr
 	}
@@ -103,13 +106,17 @@ func CollectProjectUsage(repoPath string) (*ProjectUsageResult, error) {
 }
 
 func scanClaudeProjectUsage(claudeDir, targetRepo string) *AgentProjectAttribution {
+	return scanClaudeProjectUsageDirs([]string{claudeDir}, targetRepo)
+}
+
+func scanClaudeProjectUsageDirs(claudeDirs []string, targetRepo string) *AgentProjectAttribution {
 	attr := &AgentProjectAttribution{
 		AgentID:     "claude",
 		Name:        "Claude Code",
 		ModelTokens: make(map[string]int64),
 	}
 
-	files, err := ClaudeTranscriptFiles(claudeDir)
+	files, err := ClaudeTranscriptFilesMulti(claudeDirs)
 	if err != nil {
 		return attr
 	}

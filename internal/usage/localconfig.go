@@ -52,6 +52,8 @@ type LocalUsageConfig struct {
 	// DefaultHost is the SSH host used by `harnez usage` when --host is
 	// omitted. Empty means no default is configured.
 	DefaultHost string `yaml:"default_host"`
+	// ClaudeConfigDirs replaces spec/usage.yaml claude_config_dirs when non-empty.
+	ClaudeConfigDirs []string `yaml:"claude_config_dirs"`
 }
 
 // LoadWatchConfig is the `load:` section of local.yaml (issue 110).

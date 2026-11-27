@@ -32,3 +32,27 @@ func ClaudeTranscriptFiles(claudeDir string) ([]string, error) {
 	}
 	return paths, nil
 }
+
+// ClaudeTranscriptFilesMulti discovers top-level session transcripts across
+// multiple Claude config directories in list order. A session ID (basename
+// without .jsonl) seen in an earlier directory wins; missing or unreadable
+// directories are skipped. Subagent transcripts in nested directories are excluded.
+func ClaudeTranscriptFilesMulti(dirs []string) ([]string, error) {
+	seen := make(map[string]bool)
+	var paths []string
+	for _, dir := range dirs {
+		files, err := ClaudeTranscriptFiles(dir)
+		if err != nil {
+			continue
+		}
+		for _, p := range files {
+			id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
+}
