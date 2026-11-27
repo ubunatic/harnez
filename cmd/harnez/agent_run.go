@@ -861,35 +861,40 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 					ts.abort()
 				}
 				if watchdogCrossed {
-					stopErr := fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session %q can be resumed", spec, observedTokens, threshold, sessName)
-					providerSessionID := observedSessionID
-					if providerSessionID != "" {
-						if req.SessionID != "" {
-							id = req.SessionID
-						}
-						now := time.Now()
-						sess, getErr := s.Get(id)
-						if getErr != nil {
-							sess = initialSession("stopped")
-							id = sess.ID
-						}
-						sess.ProviderSessionID = providerSessionID
-						sess.Status = "stopped"
-						sess.ProcessPID, sess.ProcessStarttime = 0, 0
-						sess.LastError = "runtime token watchdog interrupted the active turn"
-						sess.LastActiveAt = now
-						sess.Turn = turn
-						// The resume gate reads ContextTokens; store the crossing so it compacts first (1264 M1).
-						sess.ContextTokens = observedTokens
-						subagent.SyncCodexRolloutTotals(sess)
-						meterStoppedTurn(d, sess, turn, partialTurn(err), beforeCapture, turnStarted)
-						if saveErr := s.Save(sess); saveErr != nil {
-							return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
-						}
-						if req.JSON {
-							if encErr := writeStoppedAgentOutput(cmd, sess, partialTurn(err)); encErr != nil {
-								return encErr
-							}
+					// A turn may stop before the provider reports a session ID; it is still
+					// metered, saved and printed, but it cannot be resumed (ticket 1264 M3 item 2).
+					resumable := fmt.Sprintf("turn interrupted and session %q can be resumed", sessName)
+					if observedSessionID == "" {
+						resumable = "turn interrupted before the provider reported a session, so it cannot be resumed"
+					}
+					stopErr := &watchdogStopError{err: fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); %s", spec, observedTokens, threshold, resumable)}
+					if req.SessionID != "" {
+						id = req.SessionID
+					}
+					now := time.Now()
+					sess, getErr := s.Get(id)
+					if getErr != nil {
+						sess = initialSession("stopped")
+						id = sess.ID
+					}
+					if observedSessionID != "" {
+						sess.ProviderSessionID = observedSessionID
+					}
+					sess.Status = "stopped"
+					sess.ProcessPID, sess.ProcessStarttime = 0, 0
+					sess.LastError = "runtime token watchdog interrupted the active turn"
+					sess.LastActiveAt = now
+					sess.Turn = turn
+					// The resume gate reads ContextTokens; store the crossing so it compacts first (1264 M1).
+					sess.ContextTokens = observedTokens
+					subagent.SyncCodexRolloutTotals(sess)
+					meterStoppedTurn(d, sess, turn, partialTurn(err), beforeCapture, turnStarted)
+					if saveErr := s.Save(sess); saveErr != nil {
+						return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
+					}
+					if req.JSON {
+						if encErr := writeStoppedAgentOutput(cmd, sess, partialTurn(err)); encErr != nil {
+							return encErr
 						}
 					}
 					return stopErr
@@ -1343,6 +1348,9 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 					ts.abort()
 				}
 				if watchdogCrossed {
+					if observedSessionID != "" {
+						sess.ProviderSessionID = observedSessionID // the id this turn reported, not the stale one (1264 M3 item 5)
+					}
 					sess.Status = "stopped"
 					sess.ProcessPID = 0
 					sess.LastError = fmt.Sprintf("runtime token watchdog interrupted the active turn at %d tokens (limit %d)", observedTokens, threshold)
@@ -1359,7 +1367,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 							return encErr
 						}
 					}
-					return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session can be resumed", sess.Name, observedTokens, threshold)
+					return &watchdogStopError{err: fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session can be resumed", sess.Name, observedTokens, threshold)}
 				}
 			}
 		}
@@ -2040,3 +2048,11 @@ func printAgentPreview(cmd *cobra.Command, model subagent.Model, role, name, dir
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "dry-run: %s\nrole: %s\nname: %s\ndir: %s\naccept-cost: %s\nargv: %s\n", model.Spec(), role, name, dir, acceptLine, strings.Join(quoted, " "))
 	return err
 }
+
+// watchdogStopError marks a turn the runtime token watchdog stopped on purpose.
+// Detached workers keep such a stop as "stopped", not "failed" (ticket 1264 M3 item 1).
+type watchdogStopError struct{ err error }
+
+func (e *watchdogStopError) Error() string { return e.err.Error() }
+
+func (e *watchdogStopError) Unwrap() error { return e.err }

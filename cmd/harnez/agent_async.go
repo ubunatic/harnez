@@ -426,8 +426,12 @@ func runDetachedWorker(cmd *cobra.Command, req startRequest, storeDir string) er
 	}
 	current.ProcessPID = 0
 	current.LastActiveAt = time.Now()
+	var watchdogStop *watchdogStopError
 	if sig, signalled := agentSignalCause(ctx); err != nil && signalled {
 		current.Status, current.LastError = "stopped", sig.Error()
+	} else if errors.As(err, &watchdogStop) {
+		// A token-watchdog stop is an intended stop, not a failure (ticket 1264 M3 item 1).
+		current.Status, current.LastError = "stopped", err.Error()
 	} else if err != nil {
 		current.Status = "failed"
 		current.LastError = err.Error()
@@ -481,8 +485,12 @@ func runDetachedResumeWorker(cmd *cobra.Command, sessionID string, req resumeReq
 	}
 	current.ProcessPID = 0
 	current.LastActiveAt = time.Now()
+	var watchdogStop *watchdogStopError
 	if sig, signalled := agentSignalCause(ctx); err != nil && signalled {
 		current.Status, current.LastError = "stopped", sig.Error()
+	} else if errors.As(err, &watchdogStop) {
+		// A token-watchdog stop is an intended stop, not a failure (ticket 1264 M3 item 1).
+		current.Status, current.LastError = "stopped", err.Error()
 	} else if err != nil {
 		current.Status = "failed"
 		current.LastError = err.Error()

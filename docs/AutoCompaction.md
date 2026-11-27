@@ -104,7 +104,7 @@ API pricing does not describe subscription quota (for example the AI Pro plan). 
 results can overshoot a trigger; the room needed above it is still open (969 R1).
 
 Predicted, not yet observed at the point: Claude interactive `--autocompact 120000` with percent 80 → 80k; `-p`
-`--autocompact 113000` → 80k via the buffer line (the percent does not work in `-p`); or harnez's own `/compact` at 80k.
+`--autocompact 113000` → 80k via the buffer line (the percent does not work in `-p`); or harnez's own `/compact` at 100k (the Haiku default).
 
 ## Pitfalls
 

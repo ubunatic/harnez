@@ -14,7 +14,7 @@ Without a unified layer, orchestrators cannot reliably invoke low-cost models ac
 1. Dispatches and resumes developer subagents across all providers (`codex`, `claude`, `agy`, `local`). Known limit: a `claude:*` session started from inside Claude Code can't be resumed yet, because the child doesn't save its transcript (issue 498). Use one fresh session per milestone, with the ticket as context.
 2. Provides explicit, first-class reconnectability with a concise **Reconnect Banner** emitted on agent start.
 3. Enforces **session isolation and ancestry-scoped process hygiene**: agents only manage and terminate their own child agents; external sessions running concurrently in other tools/windows are strictly protected from cross-session interference.
-4. Enforces **automatic context compaction** before resume prompts at the configured token threshold (default 80,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), and detects idle KV-cache expiration.
+4. Enforces **automatic context compaction** before resume prompts at the configured token threshold (default 100,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), and detects idle KV-cache expiration.
 5. Integrates seamlessly into all **Sprint Skills** (`sprint`, `lean-sprint`, `reverse-sprint`).
 6. Supports an **Opt-In/Out Feature Switch** (`subagent_mode: harnez|native`) allowing native tool interception/replacement and side-by-side A/B effectiveness/token-usage comparisons.
 
@@ -507,7 +507,7 @@ and the session keeps running, and `harnez agent delete` removes only the local 
 ## 4. Auto-Compaction & Cache-Affinity Management
 
 ### 4.1 Auto-Compaction Trigger Rules
-1. **Context Threshold**: When the session's context usage (last call's full input, see §2.10; not the cumulative turn total) exceeds the configured threshold (default 80,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), `harnez agent` compacts before the next resume prompt.
+1. **Context Threshold**: When the session's context usage (last call's full input, see §2.10; not the cumulative turn total) exceeds the configured threshold (default 100,000 for Haiku and 200,000 for other models from `spec/agent.yaml`), `harnez agent` compacts before the next resume prompt.
 2. **Turn-Boundary Compaction**: The agent persists its decisions and code pointers to disk/ticket, then compacts its history before accepting the next milestone prompt.
 3. **Manual Override**: Callers can disable auto-compaction per run using `--no-compact`.
 4. **Done-Line Token & Cost Signal (issue 985)**: At turn completion, `[done: ...]` reports `tokens: turn <N> new (<O> out), <C> cached; session <SN> new, <SC> cached`, `context usage <U> of <W> window[, compaction limit <L>]` (or `unknown` when unavailable), and `quota unknown: cost check is the only signal` when pre-turn quota availability is unknown. If a cumulative counter drops after compaction or a provider omits usage, per-turn counts print `unknown` rather than guessing. When `agent.cost_check` thresholds in `spec/agent.yaml` (or `~/.harnez/config.yaml` under `agent.cost_check`) are crossed after `min_turns`, harnez prints a trailing `[check: ...]` line suggesting a fresh start for the session's role and model. `harnez agent list` exposes `CONTEXT_USAGE` and `CONTEXT_WINDOW` columns matching these definitions (see [AutoCompaction.md](AutoCompaction.md)).
