@@ -65,7 +65,32 @@ Hook transport, if it is ever wanted:
 
 ## Decision
 
-- Pending owner pick. Host recommendation: A now (spec plus user override), B later only if A's list proves easy to forget.
+- Owner picked **A** (2026-11-27). B (auto-learn) stays out of scope.
+- Lean sprint. Developer `hydrogen:med` (owner's pick: the Claude weekly quota was at 95%), one review agy:neon:low.
+- No Searcher: the ticket cites the locations, and the developer's first turn is read-only and confirms the write set.
+- The spec default stays `[~/.claude]`. taia's path goes only into the owner's user override, never into the repo spec, tests or docs.
+- Quota fetch and credentials always come from the primary dir only. Extra dirs contribute only `projects/*.jsonl`.
+
+## Milestones
+
+### M1: config list and the report reader
+- Spec key, for example `usage.claude_config_dirs` in `spec/usage.yaml`, with its JSON schema. Use the repo's existing user-override mechanism for spec values: find it in the plan turn and name it. Expand `~`.
+- `harnez usage history report` scans `projects/` in every listed dir. Rules:
+  - Dedupe by session id. On a collision, the first dir in list order wins, deterministically.
+  - A missing or unreadable dir is skipped with a note, not an error.
+  - Each session row carries its source label in the JSON (`source`) and in the text output.
+- Every other reader that hard-codes `~/.claude/projects` for usage totals goes through the same list. The plan turn lists them; do not change reads of `settings.json` or credentials.
+- Tests use fixture dirs under `t.TempDir()` and a fake HOME. Cases:
+  - two dirs that share a session id;
+  - a missing dir;
+  - an empty list falling back to the default;
+  - `~` expansion;
+  - subagent transcripts in nested dirs still excluded.
+
+  No test reads the real `~/.claude` or `~/.local/state/taia`.
+
+### M2: docs and live acceptance
+- `docs/Telemetry.md` (the report section) and the spec docs name the key and the override. The host runs the live acceptance below with the owner's override set.
 
 ## Acceptance (for A)
 
