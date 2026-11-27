@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor
-**Related**: [#204](204-sanitized-telemetry-and-token-export-for-datavis.md) (sanitized export), ubunatic.com issue 071 (`/telemetry/` dashboard retired to `archive/v1/telemetry/`), ubunatic.com `scripts/telemetry/` (`make update-telemetry`)
+**Related**: #1310 (owner 2026-11-27: usage dashboards are served by the harnez collector, overriding this ticket's datavis move for usage), [#204](204-sanitized-telemetry-and-token-export-for-datavis.md) (sanitized export), ubunatic.com issue 071 (`/telemetry/` dashboard retired to `archive/v1/telemetry/`), ubunatic.com `scripts/telemetry/` (`make update-telemetry`)
 
 ---
 
