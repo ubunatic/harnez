@@ -46,6 +46,9 @@ type weeklyPath struct {
 	at    []time.Time
 	group []int
 	peak  []float64
+	// start is each weekly group's first reading: its baseline, as on the weekly
+	// timeline, so a group's rise never includes the level it began at (M2b item 1).
+	start []float64
 }
 
 func newWeeklyPath(samples []usage.QuotaHistoryEntry, tol time.Duration) weeklyPath {
@@ -53,6 +56,7 @@ func newWeeklyPath(samples []usage.QuotaHistoryEntry, tol time.Duration) weeklyP
 	var p weeklyPath
 	for gi, g := range groups {
 		var peak float64
+		p.start = append(p.start, float64(g[0].UsedPercent))
 		for _, s := range g {
 			peak = max(peak, float64(s.UsedPercent))
 			p.at = append(p.at, s.Timestamp)
@@ -108,7 +112,9 @@ func fiveHourWindows(samples []usage.QuotaHistoryEntry, rises []Interval, opts O
 		pv, pg, pok := path.valueAt(prevAt)
 		if ok && pok {
 			wins[k].weeklyOK = true
-			wins[k].weekly = v
+			// A weekly reset starts the new group at its first reading, so only the
+			// rise above that baseline is a rise (M2b item 1).
+			wins[k].weekly = v - path.start[gi]
 			if gi == pg {
 				wins[k].weekly = v - pv
 			}
