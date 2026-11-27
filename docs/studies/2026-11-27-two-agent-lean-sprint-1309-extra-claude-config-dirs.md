@@ -24,3 +24,14 @@ tickets: [1309]
   - the weekly-equivalent gap fell from 2.36 to 0.86 pp.
   It also found two follow-ups, now M2 pre-work: 2 `claude-opus-4-8` calls that have no price, and the d957448b cost gap. Green tests could not show either one.
 - Review (agy:neon:low, 1m31s, 133k tokens incl. cached): 1 high (since-filter claim order), 2 medium (subagent-only claim, ResolveCommands swallowing errors), 2 low (missing tests). All checked against the diff and moved to M2 pre-work. The host review had missed the claim-order bug.
+- Turn 3, M2 (3m14s, 3.94M tokens including cached): dda05d3f (`claude-opus-4-8` price), bbded485 (the claim fix, config errors propagated, the missing tests), e2c1c831 (docs).
+  - The host checked the Opus 4.8 row on the official pricing page ($5 / $6.25 / $10 / $0.50 / $25 per MTok) and reran the touched packages: green.
+- The host hand-checked d957448b against taia's `session-usage.sh`. Claude Code's `cost-state` gives $2.09. A recompute with harnez's rules gives $2.4709, which equals the report. The gap is Claude Code's counter: it records fewer cache-write tokens than the transcript.
+- Live acceptance with the taia override:
+  - 148 sessions, 19 of them from taia;
+  - API $126.03 = ATTRIB 123.59 + UNATTRIB 2.44;
+  - weekly pp not explained locally: 1 (was 14);
+  - 5-hour pp not explained: 4 (was 203);
+  - weekly-equivalent gap: 1.09 pp;
+  - no unpriced calls left.
+- Retro: the cheap review caught the claim-order bug that the host diff review missed. The live check caught the unpriced model that the tests could not show. The developer held the one-run budget in M2 but not in M1.
