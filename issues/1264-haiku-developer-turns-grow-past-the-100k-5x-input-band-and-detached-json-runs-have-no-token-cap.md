@@ -1,6 +1,6 @@
 # 1264 — Haiku developer turns grow past the 100k 5x input band, and detached --json runs have no token cap
 
-**Status**: Open
+**Status**: Closed — Watchdog now covers every Claude turn (stream, --json, detached). Live Haiku canary at 100k threshold: stops at 134.9k (stream) and 134.8k (--json, one JSON doc, status stopped, exit 1, turn metered 72149 µ$); resume compacted first (134.9k -> 23.3k). Over-100k requests 3 -> 1. Open LOW: stopped turn output_tokens under-counted (10 for 3 calls).
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
