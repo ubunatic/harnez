@@ -1,6 +1,6 @@
 # 1308 — usage history report: 5-hour share per session and a per-session factor that does not stop at 1 weekly pp
 
-**Status**: In Progress — M2b delivered, review then M3
+**Status**: In Progress — review triaged, M3 next
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -88,6 +88,16 @@ Plan accepted: parameterise the window selector (`isClaudeWeekly`, `windowStart`
 - `weeklyPath.start` holds each weekly group's first reading; on a group change the window's weekly rise is the peak minus that baseline. Tests `weekly_gap_test.go`: the reset-gap fixture (failed before: 41 pp instead of 1) and the partition sum Σ window weekly rises = `rise_pct`. Dev: one `make test-q1`, 83 ok, 0 FAIL.
 - Host live check (`--window weekly`, 15:xx UTC): **ratio 12.19** from 8 windows (M0 12.5, raw 677 / 56 = 12.1). Σ weekly-eq 38.97 pp vs 42 pp weekly attributed: **gap −3.03 pp (−7 %)**. 58 of 123 sessions have a 5-hour factor (23 measured). Models: Haiku 19.4 weekly-eq pp, factor 25.0x (96 solo rises); Opus 19.5 pp, 76.0x (52 solo rises). Cost-weighted mix ≈ 50x, matching the weekly attributed factor (≈ 49x). 25bf9316 stays quiet.
 - Review: one agy:neon:low over 9b0dd647..899e358c is running; its findings land below as M3 pre-work.
+
+**Review (agy:neon:low, 2m10s, 9b0dd647..899e358c) and host triage. Pre-Work for M3:**
+1. **MED (host: valid, was HIGH):** fiveh.go:110-123. When a 5-hour window spans a weekly reset, `v - path.start[gi]` drops the old group's rise from `prevAt` to that group's last sample. The weekly report counts it, so Σ window weekly ≠ `rise_pct` for a range that holds the reset (`--since 7d`). Fix: add the old group's peak at its last sample minus `pv`. Extend the partition-sum test with a reset inside one 5-hour window, where the old group still rises before the reset.
+2. **MED:** fiveh.go:106-121. When the first weekly sample is after `wins[0].first` (`pok` false), take the weekly group's first reading as the baseline instead of leaving `weeklyOK` false. Test it.
+3. **HIGH (test gap; the plan promised it):** test `min_session_five_hour_pct` at exactly 1 5-hour pp (factor shown) and just below (factor nil, `n/a` in the text with its reason).
+4. **MED (test gap):** an end-to-end `Build` + `RenderText` test with a `split` basis (two sessions in one rise), the weekly `FactorBasis`, and a model with only shared rises (`ModelRow.Factor` nil).
+5. **LOW:** a capped 100 % window counted in `fiveHourRatio` (decision 2). Fix the stale comments at report.go:170-171 (claims no 5-hour quiet check) and fiveh.go:91-92 (claims "new peak alone").
+6. **Host decision, no code:** range-edge windows. The ratio uses whole 5-hour windows whose last sample lies in Since..Until. A window across `Since` brings its pre-`Since` pp into the ratio, and the open window after `Until` is left out. That is fine for a conversion rate (whole windows, never cut); M3 documents it in Telemetry.md.
+7. **M3 docs:** extend `docs/Telemetry.md` "Claude Range Report" (line 259; root evergreen, not a copy). Cover the `QUOTA 5H %`, `5H W-EQ %` and `5H FACTOR` columns; measured/split; the range ratio and its window rule (item 6); `min_ratio_weekly_pct` and `min_session_five_hour_pct`; the 5-hour quiet check via weekly-eq pp; the model rows (factor from solo rises only); the reported gap between Σ weekly-eq and weekly attributed. Numbers in docs only as an example marked with a date.
+8. One `make test-q1`, then `make install`. The host runs the live acceptance and closes the ticket.
 
 ### M1 — 5-hour share per session (Q2)
 - Run the same interval attribution on the Claude 5-hour window: resets every 5 hours are expected, not errors. Reuse the weekly code path; do not copy it.

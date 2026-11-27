@@ -35,3 +35,7 @@ tickets: [1308, 1300]
 - Turn 4 (M2b 899e358c, 2m47s, one `make test-q1`, 83 ok; budget kept): reset baseline fix plus the missing
   partition-sum test, both failing first. Live: ratio 12.19, Σ weekly-eq 38.97 vs 42 attributed (gap −3.0 pp);
   Haiku 25x, Opus 76x on solo rises. One agy:neon:low review over M1..M2b dispatched.
+- Review (agy:neon:low, 2m10s, 222k tokens incl. cached): weekly path unchanged after the refactor. Found: an old
+  weekly group's rise is dropped when a 5-hour window spans the reset (real, matters for `--since 7d`); a first
+  window without a weekly baseline; threshold, split-basis and capped-ratio tests missing; two stale comments. It
+  also flagged range-edge windows: decided as intended (whole windows) and documented. All of it is M3 pre-work.
