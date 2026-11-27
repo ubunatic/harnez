@@ -71,6 +71,13 @@ Hook transport, if it is ever wanted:
 - The spec default stays `[~/.claude]`. taia's path goes only into the owner's user override, never into the repo spec, tests or docs.
 - Quota fetch and credentials always come from the primary dir only. Extra dirs contribute only `projects/*.jsonl`.
 
+- Plan turn (dev-1309, 1m46s) accepted. Host answers to its questions:
+  - **Override file:** `~/.config/harnez/local.yaml` (`internal/usage/localconfig.go`, the machine-local file, issue 109), key `usage.claude_config_dirs`. It is not `~/.harnez/config.yaml`, because a config dir path belongs to one machine.
+  - **The override replaces the spec list.** It does not append. Docs say to list `~/.claude` first.
+  - **Source label:** the `~`-contracted dir path, in JSON `source` and in a text `SOURCE` column.
+- **Premise fix:** the report scan keeps merging `<session>/subagents/*.jsonl` by message id, as it does today. "Nested excluded" applies only to `ClaudeTranscriptFiles`. `CollectClaude` does not read `projects/` and stays as it is.
+- **Scope:** the readers named in the plan move to the list: the report, `CollectProjectUsage`, `session extract` lookup, and `ResolveCommands` (`CLAUDE_CONFIG_DIR` first, then the list). `hook.go` and `CollectClaude` stay as they are.
+
 ## Milestones
 
 ### M1: config list and the report reader

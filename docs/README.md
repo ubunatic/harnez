@@ -281,6 +281,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-27-two-agent-lean-sprint-1264-claude-token-watchdog.md](studies/2026-11-27-two-agent-lean-sprint-1264-claude-token-watchdog.md) | Two-Agent Lean Sprint: #1264, token watchdog on every Claude turn |
 | [studies/2026-11-27-two-agent-lean-sprint-1305-one-compaction-threshold.md](studies/2026-11-27-two-agent-lean-sprint-1305-one-compaction-threshold.md) | Lean sprint 1305: one compaction threshold per model, `--autocompact` on `harnez agent` |
 | [studies/2026-11-27-two-agent-lean-sprint-1308-five-hour-session-share.md](studies/2026-11-27-two-agent-lean-sprint-1308-five-hour-session-share.md) | Lean sprint 1308: 5-hour share per session and a per-session factor below 1 weekly pp |
+| [studies/2026-11-27-two-agent-lean-sprint-1309-extra-claude-config-dirs.md](studies/2026-11-27-two-agent-lean-sprint-1309-extra-claude-config-dirs.md) | Lean sprint 1309: usage reads Claude transcripts from extra config dirs (taia) |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/DevinCLIStudy.md](studies/DevinCLIStudy.md) | Devin CLI Feature Analysis, Binary Capabilities, and Harnez Comparison |
