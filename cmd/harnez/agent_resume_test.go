@@ -535,9 +535,6 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	if err != nil || sess.TokensSinceCompact != 10000 || sess.TokensCumulative != 7900000 {
 		t.Fatalf("since=%d cumulative=%d err=%v", sess.TokensSinceCompact, sess.TokensCumulative, err)
 	}
-	if subagent.ShouldCompact(sess.TokensSinceCompact) {
-		t.Fatal("next resume must not compact again")
-	}
 }
 
 type codexAutoCompactDriver struct {

@@ -89,8 +89,6 @@ auto_compact:
   # compaction exists for the local model yet, so it keeps the manual default.
   provider_modes: {claude: manual, codex: native, agy: disabled, jules: disabled}
   watchdog_grace_ms: 20000
-  # Legacy growth telemetry; dispatch uses full-context thresholds above.
-  legacy_growth_threshold_tokens: 100000
   codex_on_demand_limit_tokens: 50000
   codex_status_prompt: "summarise your known status in one line"
 model_probe_budget:

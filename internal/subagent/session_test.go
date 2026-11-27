@@ -439,30 +439,6 @@ func TestCanManage_Ancestor(t *testing.T) {
 	}
 }
 
-func TestShouldCompact_BelowThreshold(t *testing.T) {
-	if ShouldCompact(99999) {
-		t.Fatal("ShouldCompact should return false for 99999 tokens")
-	}
-}
-
-func TestShouldCompact_AtThreshold(t *testing.T) {
-	if !ShouldCompact(100000) {
-		t.Fatal("ShouldCompact should return true for 100000 tokens")
-	}
-}
-
-func TestShouldCompact_AboveThreshold(t *testing.T) {
-	if !ShouldCompact(150000) {
-		t.Fatal("ShouldCompact should return true for 150000 tokens")
-	}
-}
-
-func TestShouldCompact_Zero(t *testing.T) {
-	if ShouldCompact(0) {
-		t.Fatal("ShouldCompact should return false for 0 tokens")
-	}
-}
-
 func TestDefaultStoreDir(t *testing.T) {
 	dir := DefaultStoreDir()
 	if dir == "" {

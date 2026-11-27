@@ -596,13 +596,6 @@ func CanManage(callerParentID string, target *Session) bool {
 	return false
 }
 
-// ShouldCompact is retained for legacy token-growth telemetry. Dispatch
-// decisions use LastContextTokens and EnsureContextUnderThreshold instead.
-func ShouldCompact(tokensSinceCompact int) bool {
-	spec, err := agentSpecOnce()
-	return err == nil && tokensSinceCompact >= spec.AutoCompact.LegacyGrowthThresholdTokens
-}
-
 // CompactionTokens is the part of a turn that grows context: input re-read
 // from the provider cache does not count.
 func CompactionTokens(r *TurnResult) int {

@@ -588,7 +588,7 @@ func TestResolveRoleDynamicStaticBeforeClassifierAndGracefulFallback(t *testing.
 	}
 }
 
-const testAutoCompactYAML = "auto_compact: {default_mode: manual, provider_modes: {}, watchdog_grace_ms: 20000, legacy_growth_threshold_tokens: 100000, codex_on_demand_limit_tokens: 50000, codex_status_prompt: status}\n" + testPiCompactionYAML
+const testAutoCompactYAML = "auto_compact: {default_mode: manual, provider_modes: {}, watchdog_grace_ms: 20000, codex_on_demand_limit_tokens: 50000, codex_status_prompt: status}\n" + testPiCompactionYAML
 
 const testPiCompactionYAML = "pi_compaction: {small_window_threshold_tokens: 65536, reserve_fraction: 0.4, keep_recent_fraction: 0.25}\n"
 

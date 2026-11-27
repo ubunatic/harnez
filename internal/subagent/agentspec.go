@@ -84,12 +84,11 @@ func (s PiCompactionSpec) validate() error {
 
 // AutoCompactSpec defines provider compaction routing and watchdog timing.
 type AutoCompactSpec struct {
-	DefaultMode                 string            `yaml:"default_mode"`
-	ProviderModes               map[string]string `yaml:"provider_modes"`
-	WatchdogGraceMS             int               `yaml:"watchdog_grace_ms"`
-	LegacyGrowthThresholdTokens int               `yaml:"legacy_growth_threshold_tokens"`
-	CodexOnDemandLimitTokens    int               `yaml:"codex_on_demand_limit_tokens"`
-	CodexStatusPrompt           string            `yaml:"codex_status_prompt"`
+	DefaultMode              string            `yaml:"default_mode"`
+	ProviderModes            map[string]string `yaml:"provider_modes"`
+	WatchdogGraceMS          int               `yaml:"watchdog_grace_ms"`
+	CodexOnDemandLimitTokens int               `yaml:"codex_on_demand_limit_tokens"`
+	CodexStatusPrompt        string            `yaml:"codex_status_prompt"`
 }
 
 func (s AutoCompactSpec) mode(provider string) string {
@@ -269,7 +268,7 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 		return agentSpec{}, fmt.Errorf("agent spec: cost_check values must not be negative")
 	}
 	validMode := func(mode string) bool { return mode == "manual" || mode == "native" || mode == "disabled" }
-	if !validMode(spec.AutoCompact.DefaultMode) || spec.AutoCompact.ProviderModes == nil || spec.AutoCompact.WatchdogGraceMS <= 0 || spec.AutoCompact.LegacyGrowthThresholdTokens <= 0 {
+	if !validMode(spec.AutoCompact.DefaultMode) || spec.AutoCompact.ProviderModes == nil || spec.AutoCompact.WatchdogGraceMS <= 0 {
 		return agentSpec{}, fmt.Errorf("agent spec: auto_compact requires valid modes and positive watchdog_grace_ms")
 	}
 	if spec.AutoCompact.CodexOnDemandLimitTokens <= 0 || strings.TrimSpace(spec.AutoCompact.CodexStatusPrompt) == "" {

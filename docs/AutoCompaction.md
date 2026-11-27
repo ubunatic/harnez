@@ -8,18 +8,62 @@ Consult before changing `compact_threshold_tokens`, `agent.compact_thresholds`, 
 Each fact is marked **measured** (owner or canary run, with version), **docs** (official source) or **unverified**
 (blogs, issue reports). Re-measure after a CLI upgrade before relying on a number.
 
-## Two triggers
+## One threshold per model
 
-- **harnez:** `compact_threshold_tokens` in `spec/agent.yaml` defaults to 200000; spec `compact_thresholds` defaults Haiku to 100000. User `agent.compact_thresholds` overrides model-specific defaults, which take precedence over the user global threshold (`internal/subagent/compact.go`). Before each prompt,
-  `harnez agent` compares the last turn's input tokens with it and sends `/compact` (591); the stream watchdog stops
-  a turn that grows past it (592). Since 1264 the watchdog covers every Claude turn (streaming, `--json`, detached): it kills the process group at the crossing, meters the finished calls and stores the token count so the next resume compacts first. Absolute tokens only, no percent yet (969).
-- `auto_compact` in `spec/agent.yaml` selects manual, native, or disabled routing by provider: Claude uses manual,
-  Codex uses native, and agy is disabled until reliable context counts are available (644, 869). The same spec sets
-  the watchdog's shutdown grace and the legacy growth-telemetry threshold. Turn-end `[done: ...]` output also
-  shows `context usage`, `compaction limit`, per-turn vs. session tokens, and `[check: ...]` cost warnings
-  (`agent.cost_check`, documented in [HarnezAgentArchitecture.md](HarnezAgentArchitecture.md#L508-L509)).
-- **The CLI's own trigger,** below. Whichever comes first wins, so harnez values only work if the CLI's trigger is
-  set at or above them.
+harnez resolves one compaction threshold per run (`CompactThreshold` in `internal/subagent/compact.go`). Precedence,
+highest first:
+
+1. `--autocompact` on `harnez agent start` or `resume` (per run, stored on the session as `compact_tokens`).
+2. User `agent.compact_thresholds` in `~/.harnez/config.yaml`, then spec `compact_thresholds` in `spec/agent.yaml`
+   (keys: `<model spec>`, `<provider>:<model>`, `<provider>`). Spec Haiku is 100000.
+3. User `agent.compact_threshold_tokens`, then spec `compact_threshold_tokens` (200000).
+
+A value of 0 or below disables harnez's own compaction for that run (no error). A caller's
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW` is replaced on a Claude child when `--autocompact` is set (one stderr note); without
+the flag it is kept, and a note is printed only when it is not a number or is above the threshold.
+
+The threshold reaches each provider in one of two ways:
+
+| Provider | How the threshold reaches the CLI | Role of harnez's own check |
+| --- | --- | --- |
+| Claude | env `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<threshold>` on the child (`claudeChildEnv`, harnez value last) | **Backstop.** Claude compacts natively first, about 33k below the window (M0b). The pre-turn `/compact` and the stream watchdog at the threshold catch what it misses. |
+| Codex | `-c model_auto_compact_token_limit=<threshold>` (`codex.go`) | **Primary** for the native trigger. Pre-turn `/compact` and the watchdog stay as backstops (unmeasured for the exact limit). |
+| Pi, lmcoder | not passed to the CLI; harnez's own checks where the driver supports them (**unverified** for Pi here) | Only mechanism. `--autocompact` fails before launch for Pi and lmcoder, and for agy and Jules. |
+| agy, Jules | no native trigger; automatic compaction off | Off. `--autocompact` fails before launch. |
+
+Watchdog and pre-turn `/compact` use the same resolved value as the env or `-c` argument, so a `--autocompact 120k`
+run is checked at 120000 everywhere.
+
+Before each prompt, `harnez agent` compares the last turn's full input tokens with the threshold and sends `/compact`
+(591, `EnsureContextUnderThreshold`). The stream watchdog stops a turn that grows past it (592). Since 1264 the
+watchdog covers every Claude turn (streaming, `--json`, detached): it kills the process group at the crossing, meters
+the finished calls and stores the token count so the next resume compacts first. Absolute tokens only, no percent
+(969).
+
+`auto_compact` in `spec/agent.yaml` selects manual, native, or disabled routing by provider: Claude uses manual,
+Codex uses native, and agy is disabled until reliable context counts are available (644, 869). The same spec sets
+the watchdog's shutdown grace. Turn-end `[done: ...]` output also shows `context usage`, `compaction limit`,
+per-turn vs. session tokens, and `[check: ...]` cost warnings (`agent.cost_check`, documented in
+[HarnezAgentArchitecture.md](HarnezAgentArchitecture.md#L508-L509)).
+
+`harnez agent start --dry-run` prints `compact window: <n> (<source>, <mechanism>)` so the value can be checked before
+launch.
+
+Measured on Claude 2.1.330 (issue 1305 M0 and M0b; Haiku, same load, `-p`, env or settings key):
+
+| Run | Env | Settings `autoCompactWindow` | Peak prompt | Requests > 100k | Compactions (pre-compact) |
+| --- | --- | --- | --- | --- | --- |
+| b1 | 150000 | 200k | 113.2k | 2 | 1 (117.8k) |
+| b2 | 60000 | 200k | 65.1k | 0 | 3 (65.9k, 65.7k, 68.8k) |
+| b3 | unset | 100000 | 67.6k | 0 | 3 (66.0k, 66.9k, 71.3k) |
+
+- Claude triggers about 33k below the window (150k → 117.8k; 100k → about 66k). Values under 100k act as 100k
+  (**measured**, one pair; the floor is a single observation).
+- The env and the settings key mean the same thing; the env wins when both are set.
+- The "compacts at 96-106k with a 100k window" reading from 1264 did not reproduce on 2.1.330 (**unverified** against
+  the 1264 run; not re-run).
+- Consequence: a harnez threshold T on Claude compacts natively at about T − 33k (floor about 66k). Harnez's
+  watchdog at T should rarely fire.
 
 ## Claude Code (2.1.311)
 
@@ -103,8 +147,8 @@ later call re-reads less cached context.
 API pricing does not describe subscription quota (for example the AI Pro plan). Each turn's new prompt and tool
 results can overshoot a trigger; the room needed above it is still open (969 R1).
 
-Predicted, not yet observed at the point: Claude interactive `--autocompact 120000` with percent 80 → 80k; `-p`
-`--autocompact 113000` → 80k via the buffer line (the percent does not work in `-p`); or harnez's own `/compact` at 100k (the Haiku default).
+Predicted, not observed: Claude interactive `--autocompact 120000` with percent 80 → 80k (the percent works only
+interactively; see the print-mode note above). Canary for the Haiku 100k default, with the owner's 200k settings: 0 requests over 100k (ticket 1305 acceptance).
 
 ## Pitfalls
 
