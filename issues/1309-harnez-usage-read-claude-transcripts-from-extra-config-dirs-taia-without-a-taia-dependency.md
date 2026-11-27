@@ -96,7 +96,41 @@ Hook transport, if it is ever wanted:
 
   No test reads the real `~/.claude` or `~/.local/state/taia`.
 
+**M1 delivered (config list and readers)**: eecc3519, 9874666a, pushed.
+- Spec key `usage.claude_config_dirs`, override in local.yaml, and `ScanDirs` with first-dir-wins dedupe, a skip note and the SOURCE label.
+- Readers also moved to the list: `CollectProjectUsage`, `session extract`, `ResolveCommands`.
+- Host check: touched packages green.
+- Budget note: the developer ran targeted tests before `make test-q1`, which broke the one-run budget.
+
+Live check (host, 2026-11-27 16:16 UTC, weekly window), first without the override, then with `[~/.claude, ~/.local/state/taia/claude]`:
+
+| | without | with taia |
+|---|---|---|
+| Sessions | 129 | 148 (19 from taia) |
+| Calls | 5801 | 8663 |
+| ATTRIB $ | 80.98 | 120.23 |
+| Weekly pp not explained locally | 14.0 | 1.0 (within the 1.0 tolerance) |
+| 5-hour pp not explained | 203 | 6 |
+| Weekly-equivalent vs weekly attributed | 41.64 vs 44.00 | 57.86 vs 57.00 (gap 0.86) |
+| API $ total | 83.38 | n/a (2 unpriced calls) |
+
+- Without the override, the bucket sums hold (80.98 + 2.40 = 83.38), every row's source is `~/.claude`, and no warnings appear. This was not compared against a pre-1309 binary.
+- Session `d957448b` (taia): 167 calls, $2.47. Its handoff gave 160 calls and $1.91. Not yet reconciled.
+
 ### M2: docs and live acceptance
+
+**Pre-Work / Required Refinements (from the M1 review)**
+1. **Unpriced model:** taia session `0506b580` has 2 calls on `claude-opus-4-8`, which has no entry in `spec/pricing.yaml`. That one gap turns the API $ total into n/a and drops the "window (all local calls ...)" line.
+   - If an official Anthropic pricing source exists for that model, add the entry with the source cited in the commit.
+   - If not, leave it unpriced and say so in the report.
+   - Never guess a price.
+2. **d957448b reconciliation:** explain the gap between 167 calls / $2.47 and the handoff's 160 / $1.91. Possible causes:
+   - the session continued after the handoff;
+   - the subagent merge;
+   - a model mix that is not all Haiku;
+   - cache-write TTL pricing.
+   Reason from the code. The host does the hand check against taia's `cost-state`, because helpers must not read taia's state dir.
+3. Findings from the agy:neon:low M1 review, added below once it reports.
 - `docs/Telemetry.md` (the report section) and the spec docs name the key and the override. The host runs the live acceptance below with the owner's override set.
 
 ## Acceptance (for A)
