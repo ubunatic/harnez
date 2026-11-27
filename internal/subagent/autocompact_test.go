@@ -96,3 +96,18 @@ func TestSessionCompactTokensJSON(t *testing.T) {
 		t.Fatalf("zero CompactTokens must be omitted, got %s", data)
 	}
 }
+
+func TestCompactWindowLine(t *testing.T) {
+	got := CompactWindowLine(Model{Provider: "claude", Name: "haiku", Tier: "low", CompactTokens: 120000})
+	if want := "120000 (--autocompact, env CLAUDE_CODE_AUTO_COMPACT_WINDOW)"; got != want {
+		t.Fatalf("claude --autocompact line = %q, want %q", got, want)
+	}
+	got = CompactWindowLine(Model{Provider: "codex", Name: "luna", Tier: "low"})
+	if !strings.Contains(got, "(threshold, -c model_auto_compact_token_limit)") {
+		t.Fatalf("codex threshold line = %q, want threshold source and -c mechanism", got)
+	}
+	got = CompactWindowLine(Model{Provider: "pi", Name: "x", Tier: "low", CompactTokens: 5000})
+	if want := "5000 (--autocompact, not passed to provider)"; got != want {
+		t.Fatalf("pi line = %q, want %q", got, want)
+	}
+}

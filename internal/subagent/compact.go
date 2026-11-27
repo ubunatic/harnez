@@ -110,6 +110,31 @@ func CompactThreshold(model Model) (int, error) {
 	return threshold, nil
 }
 
+// CompactWindowLine describes the compaction window a run will use and how it
+// reaches the provider, for the dry-run preview. It resolves the same way the
+// launch does, so the number matches what the child gets.
+func CompactWindowLine(model Model) string {
+	source := "threshold"
+	if model.CompactTokens > 0 {
+		source = "--autocompact"
+	}
+	n, err := CompactThreshold(model)
+	if errors.Is(err, errCompactDisabled) {
+		return "off (threshold 0)"
+	}
+	if err != nil {
+		return "unresolved: " + err.Error()
+	}
+	mechanism := "not passed to provider"
+	switch model.Provider {
+	case "claude":
+		mechanism = "env " + claudeCompactWindowEnv
+	case "codex":
+		mechanism = "-c model_auto_compact_token_limit"
+	}
+	return fmt.Sprintf("%d (%s, %s)", n, source, mechanism)
+}
+
 // VerifyCompaction requires an explicit compact acknowledgement and a smaller
 // provider-reported input count before allowing another prompt to be sent.
 func VerifyCompaction(before int, result *TurnResult) error {

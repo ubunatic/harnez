@@ -2073,7 +2073,7 @@ func printAgentPreview(cmd *cobra.Command, model subagent.Model, role, name, dir
 		quoted[i] = strconv.Quote(arg)
 	}
 	acceptLine := agent.CostlyModelDryRunLine(model, acceptCost, availability, time.Now())
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "dry-run: %s\nrole: %s\nname: %s\ndir: %s\naccept-cost: %s\nargv: %s\n", model.Spec(), role, name, dir, acceptLine, strings.Join(quoted, " "))
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "dry-run: %s\nrole: %s\nname: %s\ndir: %s\naccept-cost: %s\ncompact window: %s\nargv: %s\n", model.Spec(), role, name, dir, acceptLine, subagent.CompactWindowLine(model), strings.Join(quoted, " "))
 	return err
 }
 

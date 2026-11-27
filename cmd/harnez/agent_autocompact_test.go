@@ -189,3 +189,31 @@ func TestAutocompactResumePersisted(t *testing.T) {
 		})
 	}
 }
+
+// TestDetachedResumeWorkerAutocompact: a detached resume with --autocompact
+// stores the value and gives the worker's Claude child the window (pre-work 2).
+func TestDetachedResumeWorkerAutocompact(t *testing.T) {
+	envPath := autocompactClaude(t, claudeLiveStream(claudeLiveInit(), claudeLiveAssistant("msg_live", 120000, "null")), "sleep 5")
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Create(&subagent.Session{ID: "det-auto-1", Name: "claude-det-auto", Provider: "claude", Model: "haiku", Tier: "low", Status: "completed", ProviderSessionID: "sess-live", ProcessPID: os.Getpid(), WorkingDir: t.TempDir(), Role: "advisor", HarnessType: "harnez", Turn: 1}); err != nil {
+		t.Fatal(err)
+	}
+	err = runDetachedResumeWorker(claudeLiveCmd(), "det-auto-1", resumeRequest{AutocompactSet: true, AutocompactTokens: 120000, Prompt: "continue", StreamMode: streamFull}, storeDir)
+	if err == nil || !strings.Contains(err.Error(), "crossed live token threshold at 120000 tokens (limit 120000)") {
+		t.Fatalf("detached resume worker error = %v, want a watchdog stop at 120000", err)
+	}
+	if got := readWindow(t, envPath); got != "120000" {
+		t.Fatalf("worker child CLAUDE_CODE_AUTO_COMPACT_WINDOW = %q, want 120000", got)
+	}
+	sess, err := store.Get("det-auto-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.CompactTokens != 120000 {
+		t.Fatalf("stored CompactTokens = %d, want 120000", sess.CompactTokens)
+	}
+}

@@ -179,3 +179,24 @@ func TestPromptFlagErrorRedactsPrompt(t *testing.T) {
 		}
 	}
 }
+
+// TestAgentDryRunShowsCompactWindow: the preview names the --autocompact window
+// and the provider mechanism without launching anything.
+func TestAgentDryRunShowsCompactWindow(t *testing.T) {
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, dbPath: filepath.Join(t.TempDir(), "telemetry.db")}
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	req := startRequest{DryRun: true, Prompt: "p", PromptSource: "-p", Name: "worker", Role: "advisor", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull, AutocompactSet: true, AutocompactTokens: 120000}
+	if err := runStart(t.Context(), cmd, deps, req); err != nil {
+		t.Fatal(err)
+	}
+	want := "compact window: 120000 (--autocompact, -c model_auto_compact_token_limit)"
+	if !strings.Contains(out.String(), want) {
+		t.Fatalf("missing %q in %s", want, out.String())
+	}
+}
