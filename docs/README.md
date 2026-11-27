@@ -277,6 +277,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-11-26-two-agent-lean-sprint-1302-claude-cost-report.md](studies/2026-11-26-two-agent-lean-sprint-1302-claude-cost-report.md) | Two-Agent Lean Sprint: #1302 — Claude cost report |
 | [studies/2026-11-26-two-agent-lean-sprint-1303-claude-compaction-telemetry.md](studies/2026-11-26-two-agent-lean-sprint-1303-claude-compaction-telemetry.md) | Two-Agent Lean Sprint: #1303, Claude compaction telemetry |
 | [studies/2026-11-26-two-agent-lean-sprint-1304-one-hook-entry-per-event.md](studies/2026-11-26-two-agent-lean-sprint-1304-one-hook-entry-per-event.md) | Two-Agent Lean Sprint: #1304, one hook entry per agent event |
+| [studies/2026-11-27-claude-plan-subsidy-analytics-assessment.md](studies/2026-11-27-claude-plan-subsidy-analytics-assessment.md) | Claude plan-subsidy analytics: how well the six questions are answered now |
 | [studies/2026-11-27-two-agent-lean-sprint-1264-claude-token-watchdog.md](studies/2026-11-27-two-agent-lean-sprint-1264-claude-token-watchdog.md) | Two-Agent Lean Sprint: #1264, token watchdog on every Claude turn |
 | [studies/2026-11-27-two-agent-lean-sprint-1305-one-compaction-threshold.md](studies/2026-11-27-two-agent-lean-sprint-1305-one-compaction-threshold.md) | Lean sprint 1305: one compaction threshold per model, `--autocompact` on `harnez agent` |
 | [studies/AgentSendCommandStatus.md](studies/AgentSendCommandStatus.md) | Status Report: `harnez agent send` Command |
