@@ -1,6 +1,6 @@
 # 1300 — harnez usage: Claude plan-subsidy analytics (tokens per range and session, API vs plan cost, time of day)
 
-**Status**: Backlog — parked 2026-11-26; gaps go to 1301 (pricing inputs and live canaries) and 1302 (range and session report, long Haiku session)
+**Status**: Backlog — parked 2026-11-26; gaps go to 1301 (pricing inputs), 1302 (report) and 1308 (Q2 5-hour share, Q5 per-session factor)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
