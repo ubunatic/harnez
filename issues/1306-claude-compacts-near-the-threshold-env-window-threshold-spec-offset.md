@@ -1,6 +1,6 @@
 # 1306 — Claude compacts near the threshold: env window = threshold + spec offset
 
-**Status**: In Progress
+**Status**: Closed — Claude window = threshold + claude_compact_window_offset_tokens (23000); Haiku 100k gets 123000. Live haiku:med canary on the 1305 load: peak 90.7k (was 65.7k), native compaction mid-turn, 0 requests over 100k. make test-q1 green (83 packages).
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
