@@ -23,6 +23,26 @@ const claudeCompactWindowEnv = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
 // threshold resolves (for example a config that sets 0), the child gets
 // environ unchanged, as the start path disables its watchdog in that case.
 func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
+	prefix := claudeCompactWindowEnv + "="
+	if model.CompactTokens > 0 {
+		// --autocompact wins over any caller value: drop every caller copy so
+		// the one harnez sets is the only one Claude sees.
+		out := make([]string, 0, len(environ)+1)
+		differing := ""
+		for _, kv := range environ {
+			if strings.HasPrefix(kv, prefix) {
+				if v := strings.TrimPrefix(kv, prefix); v != strconv.Itoa(model.CompactTokens) {
+					differing = v
+				}
+				continue
+			}
+			out = append(out, kv)
+		}
+		if differing != "" && warn != nil {
+			fmt.Fprintf(warn, "harnez: %s=%s replaced by --autocompact %d for %s\n", claudeCompactWindowEnv, differing, model.CompactTokens, model.Spec())
+		}
+		return append(out, prefix+strconv.Itoa(model.CompactTokens))
+	}
 	threshold, err := CompactThreshold(model)
 	if err != nil {
 		// A zero threshold is an intentional opt-out: stay silent.
@@ -31,7 +51,6 @@ func claudeChildEnv(model Model, environ []string, warn io.Writer) []string {
 		}
 		return environ
 	}
-	prefix := claudeCompactWindowEnv + "="
 	// exec keeps the last duplicate, so the last value is the one Claude sees.
 	caller := ""
 	found := false

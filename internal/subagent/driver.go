@@ -137,6 +137,9 @@ type Model struct {
 	// Effort is nil (supported, the default) or false for models that
 	// reject an effort/reasoning flag (e.g. agy:sonnet, agy:opus).
 	Effort *bool
+	// CompactTokens is a per-run compaction threshold from --autocompact.
+	// Zero means the configured threshold applies (see CompactThreshold).
+	CompactTokens int
 }
 
 type modelAlias struct {

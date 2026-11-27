@@ -58,7 +58,7 @@ func warnDisabledSessionModel(cmd *cobra.Command, sess *subagent.Session, check 
 		return err
 	}
 	if !enabled {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: session %q uses model %s disabled by current policy; continuing the existing session.\n", sess.Name, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}.Spec())
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: session %q uses model %s disabled by current policy; continuing the existing session.\n", sess.Name, sessionModel(sess).Spec())
 	}
 	return nil
 }
@@ -323,7 +323,7 @@ func buildTurnDoneMeta(sess *subagent.Session, quotaUnknown bool) turnDoneMeta {
 	}
 	mode, modeErr := subagent.AutoCompactMode(sess.Provider)
 	if modeErr == nil && mode != "disabled" {
-		if limit, err := subagent.CompactThreshold(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}); err == nil && limit > 0 {
+		if limit, err := subagent.CompactThreshold(sessionModel(sess)); err == nil && limit > 0 {
 			meta.compactLimit = limit
 		}
 	}
@@ -372,6 +372,10 @@ type startRequest struct {
 	SessionID                                                                 string
 	MaxToolCalls                                                              int
 	MaxToolCallsSet                                                           bool
+	// AutocompactSet reports that --autocompact was passed; AutocompactTokens
+	// is then the per-run window (0 means auto, the configured threshold).
+	AutocompactSet    bool
+	AutocompactTokens int
 }
 
 func providerAvailability(provider, model string) usage.ProviderQuotaAvailability {
@@ -425,7 +429,7 @@ func startModelError(spec string, selection subagent.ModelSelection, err error) 
 }
 
 func workerSelection(sess *subagent.Session, spec string) (subagent.ModelSelection, error) {
-	model := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
+	model := sessionModel(sess)
 	if model.Spec() != spec {
 		return subagent.ModelSelection{}, fmt.Errorf("worker model %q conflicts with recorded model %q", spec, model.Spec())
 	}
@@ -552,6 +556,10 @@ type resumeRequest struct {
 	AllowExhaustedQuota, AcceptCost          bool
 	MaxToolCalls                             int
 	MaxToolCallsSet                          bool
+	// AutocompactSet and AutocompactTokens mirror startRequest; unset keeps
+	// the persisted session value.
+	AutocompactSet    bool
+	AutocompactTokens int
 }
 
 // rejectBlockedSessionModel refuses a resume while a local model block (issue
@@ -635,6 +643,12 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		return startModelError(spec, selection, err)
 	}
 	m := selection.Model
+	if req.AutocompactSet {
+		if err := checkAutocompactProvider(m.Provider); err != nil {
+			return err
+		}
+		m.CompactTokens = req.AutocompactTokens
+	}
 	if err := subagent.ValidateContextMode(m.Provider, req.ContextMode); err != nil {
 		return err
 	}
@@ -712,12 +726,12 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 		if req.SessionID == "" && sessionID == "" {
 			sessionID = uuid.NewString()
 		}
-		return &subagent.Session{ID: sessionID, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: status, Role: role, CreatedAt: now, LastActiveAt: now}
+		return &subagent.Session{ID: sessionID, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, CompactTokens: m.CompactTokens, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: status, Role: role, CreatedAt: now, LastActiveAt: now}
 	}
 	if req.SessionID == "" && d.storeDir != "" {
 		if timeout := foregroundDetachTimeout(cmd); timeout > 0 {
 			now := time.Now()
-			sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now}
+			sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, CompactTokens: m.CompactTokens, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now}
 			sess.StdoutLog = filepath.Join(d.storeDir, id+".stdout.log")
 			sess.StderrLog = filepath.Join(d.storeDir, id+".stderr.log")
 			if err := s.Create(sess); err != nil {
@@ -958,7 +972,7 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
 	after := recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	now := time.Now()
-	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, CacheWriteTokensTotal: r.CacheWriteTokens, CacheWriteTokensKnown: r.CacheWriteTokensKnown, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: !r.TurnTokensUnknown || r.CumulativeTotalsKnown, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, FreshStartContextTokens: max(r.ContextTokens, 0), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{subagent.NewTurnRecord(turn, r)}}
+	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, ModelAlias: selection.Trait, Tier: m.Tier, CompactTokens: m.CompactTokens, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), CallerStarttime: procs.ProcessStarttime(os.Getpid()), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, CacheWriteTokensTotal: r.CacheWriteTokens, CacheWriteTokensKnown: r.CacheWriteTokensKnown, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: !r.TurnTokensUnknown || r.CumulativeTotalsKnown, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, FreshStartContextTokens: max(r.ContextTokens, 0), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{subagent.NewTurnRecord(turn, r)}}
 	sess.ContextWindowSize = r.ContextWindowSize
 	populateTurnCostRecord(d.dbPath, sess, turn, r, before, after)
 	persistAgentTurnTokens(d.dbPath, sess, r, now)
@@ -1057,7 +1071,10 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		if err != nil {
 			return err
 		}
-		m := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
+		m := sessionModel(sess)
+		if req.AutocompactSet {
+			m.CompactTokens = req.AutocompactTokens
+		}
 		return printAgentPreview(cmd, m, role, sess.Name, sess.WorkingDir, sess.ProviderID(), req.Prompt, req.PromptSource, "", approve, true, req.AcceptCost, d.availability)
 	}
 	resumeIdle := time.Duration(0)
@@ -1080,7 +1097,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			}
 		}
 	}
-	if warning, err := agent.CheckCostlyModel(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, req.AcceptCost, d.availability, time.Now()); err != nil {
+	if warning, err := agent.CheckCostlyModel(sessionModel(sess), req.AcceptCost, d.availability, time.Now()); err != nil {
 		return err
 	} else if warning != "" && req.SessionID == "" {
 		fmt.Fprintln(cmd.ErrOrStderr(), warning)
@@ -1092,6 +1109,17 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 		}
 		if len(writers) > 0 {
 			return fmt.Errorf("session %q already has a resume turn running (PID %d); writer is still alive; stop it or run `harnez agent wait %s` before resuming", sess.Name, writers[0].PID, sess.Name)
+		}
+	}
+	if req.AutocompactSet {
+		if err := checkAutocompactProvider(sess.Provider); err != nil {
+			return err
+		}
+		if sess.CompactTokens != req.AutocompactTokens {
+			sess.CompactTokens = req.AutocompactTokens
+			if err := s.Save(sess); err != nil {
+				return fmt.Errorf("save --autocompact for session %q: %w", sess.Name, err)
+			}
 		}
 	}
 	if sess.Status == "running" && req.SessionID == "" {
@@ -1129,7 +1157,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return err
 		}
 	}
-	model := subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}
+	model := sessionModel(sess)
 	tcGuard, err := newToolCallGuard(model, role, req.MaxToolCalls, req.MaxToolCallsSet, cmd.ErrOrStderr())
 	if err != nil {
 		return err
@@ -1168,7 +1196,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 	}
 	tl := newTimeline(cmd)
 	compacted, compactNote := false, ""
-	threshold, err := subagent.CompactThreshold(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
+	threshold, err := subagent.CompactThreshold(sessionModel(sess))
 	if err != nil {
 		return err
 	}
@@ -1187,7 +1215,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			}
 			return nil, nil // interactive output has no verified completion/token signal
 		}
-		return driver.Compact(ctx, sess.ProviderID(), subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
+		return driver.Compact(ctx, sess.ProviderID(), sessionModel(sess))
 	}
 	// Interactive sessions are guarded above; native compaction is verified after resume.
 	if compactMode == "manual" || interactive {

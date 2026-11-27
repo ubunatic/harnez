@@ -687,7 +687,7 @@ func resumeState(sess *subagent.Session) string {
 	if sess.LastError != "" {
 		return "failed"
 	}
-	d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir)
+	d := agentDriver(sessionModel(sess), sess.WorkingDir)
 	if checker, ok := d.(subagent.ResumeChecker); ok {
 		if resumable, _ := checker.CheckResumable(sess.ProviderID()); !resumable {
 			return "terminal"

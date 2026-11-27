@@ -58,6 +58,7 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 	var startPrompt string
 	var startInteractive bool
 	var startDryRun bool
+	var startAutocompact string
 	start := &cobra.Command{Use: "start [role] [name] [prompt...]", Short: "Start a new agent session", Long: "Start a new agent session. A leading role or alias may be positional; add a session name before the prompt when needed.\n\n" + sessionBackgroundHelp, Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"\n  harnez agent start explorer \"audit SQLite queries\"\n  harnez agent start coder my-worker \"implement ticket 041\"\n  harnez agent start -i --model claude:haiku --name chat", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(ac.planSpec)
 		if err != nil {
@@ -97,6 +98,13 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 		if startDryRun && (startInteractive || ac.detach || ac.workerID != "") {
 			return fmt.Errorf("--dry-run cannot be combined with interactive or detached execution")
 		}
+		autoSet, autoTokens, err := autocompactFlag(cmd, startAutocompact)
+		if err != nil {
+			return err
+		}
+		if autoSet && startInteractive {
+			return fmt.Errorf("--autocompact cannot be combined with interactive mode")
+		}
 		if startInteractive {
 			if err := validateInteractiveFlags(cmd, ac.detach, ac.jsonOut, ac.streamMode, ac.agentTimeout, ac.workerID != ""); err != nil {
 				return err
@@ -104,6 +112,7 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 			return runInteractiveStart(cmd, interactiveDeps{store: ac.store, parent: ac.parent, storeDir: ac.storeDir}, interactiveStartRequest{Prompt: prompt, Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, Role: startRoleSpec, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
 		}
 		req := startRequest{DryRun: startDryRun, PromptSource: dryPromptSource(startFiles, startPrompt), Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: ac.jsonOut, PlanFirst: planFirst, SessionID: ac.workerID, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, ContextMode: ac.contextMode, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls")}
+		req.AutocompactSet, req.AutocompactTokens = autoSet, autoTokens
 		if ac.workerID != "" {
 			return runDetachedWorker(cmd, req, ac.storeDir)
 		}
@@ -138,6 +147,7 @@ func (ac *agentCLI) startCmd() *cobra.Command {
 	_ = start.RegisterFlagCompletionFunc("plan", flagValueCompletion("yes", "no"))
 	_ = start.RegisterFlagCompletionFunc("stream", flagValueCompletion(streamFull, streamStats))
 	start.Flags().StringVar(&ac.streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
+	start.Flags().StringVar(&startAutocompact, "autocompact", "", autocompactFlagUsage)
 	withHostTrackingLine(start, ac.store, ac.parent, func() bool { return ac.workerID != "" })
 	return start
 }
@@ -352,6 +362,7 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 	var resumePrompt string
 	var resumeInteractive bool
 	var resumeDryRun bool
+	var resumeAutocompact string
 	var resumeJulesID string
 	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Long: "Resume an existing agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w\n  harnez agent resume --model jules --id <jules-session-id> wait", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(ac.planSpec)
@@ -406,11 +417,18 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 			return runInteractiveResume(cmd, interactiveDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir}, interactiveResumeRequest{Name: ac.name, Prompt: prompt, Dir: ac.workDir, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost})
 		}
 		maxToolCallsSet := cmd.Flags().Changed("max-tool-calls") || cmd.InheritedFlags().Changed("max-tool-calls")
+		autoSet, autoTokens, err := autocompactFlag(cmd, resumeAutocompact)
+		if err != nil {
+			return err
+		}
+		if autoSet && resumeInteractive {
+			return fmt.Errorf("--autocompact cannot be combined with interactive mode")
+		}
 		if resumeWorkerID != "" {
-			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet}, ac.storeDir)
+			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{AutocompactSet: autoSet, AutocompactTokens: autoTokens, Role: ac.roleSpec, Prompt: prompt, Name: ac.name, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, JSON: true, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet}, ac.storeDir)
 		}
 		return withAgentTimeout(cmd, ac.agentTimeout, func(ctx context.Context) error {
-			return runResume(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, resumeRequest{DryRun: resumeDryRun, PromptSource: dryPromptSource(resumeFiles, resumePrompt), Role: ac.roleSpec, Prompt: prompt, Name: ac.name, Selector: selector, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: continueResume, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet})
+			return runResume(ctx, cmd, agentDeps{store: ac.store, parent: ac.parent, find: ac.find, storeDir: ac.storeDir, dbPath: agentUsageDBPath()}, resumeRequest{AutocompactSet: autoSet, AutocompactTokens: autoTokens, DryRun: resumeDryRun, PromptSource: dryPromptSource(resumeFiles, resumePrompt), Role: ac.roleSpec, Prompt: prompt, Name: ac.name, Selector: selector, ModelSpec: ac.modelSpec, Dir: ac.workDir, StreamMode: ac.streamMode, Continue: continueResume, JSON: ac.jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: ac.allowExhaustedQuota, AcceptCost: ac.acceptCost, MaxToolCalls: ac.maxToolCalls, MaxToolCallsSet: maxToolCallsSet})
 		})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(ac.storeDir, ac.parent)
@@ -426,6 +444,7 @@ func (ac *agentCLI) resumeCmd() *cobra.Command {
 	resume.Flags().BoolVarP(&resumeInteractive, "interactive", "i", false, "resume in the provider's interactive terminal")
 	resume.Flags().StringVar(&resumeJulesID, "id", "", "adopt and resume a Jules session by its ID (requires --model jules); records it once")
 	resume.Flags().BoolVarP(&continueResume, "continue", "c", false, "resume the most recently active attributable session")
+	resume.Flags().StringVar(&resumeAutocompact, "autocompact", "", autocompactFlagUsage+"; without it the stored value is kept")
 	withHostTrackingLine(resume, ac.store, ac.parent, func() bool { return resumeWorkerID != "" })
 	return resume
 }

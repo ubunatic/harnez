@@ -3,8 +3,10 @@ package subagent
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -32,9 +34,42 @@ type compactConfig struct {
 	} `yaml:"agent"`
 }
 
-// CompactThreshold prefers user model overrides, spec model defaults, the user
-// global threshold, then the spec global default.
+// ParseAutocompact parses the --autocompact value. "auto" returns 0 (use the
+// configured threshold). Otherwise the value is a positive token count, with
+// an optional lowercase k suffix meaning thousands (120k is 120000).
+func ParseAutocompact(s string) (int, error) {
+	if s == "auto" {
+		return 0, nil
+	}
+	digits, mult := s, 1
+	if strings.HasSuffix(s, "k") {
+		digits, mult = strings.TrimSuffix(s, "k"), 1000
+	}
+	if digits == "" {
+		return 0, fmt.Errorf("invalid --autocompact %q: want auto, a token count, or a count with k (120k)", s)
+	}
+	for _, r := range digits {
+		if r < '0' || r > '9' {
+			return 0, fmt.Errorf("invalid --autocompact %q: want auto, a token count, or a count with k (120k)", s)
+		}
+	}
+	n, err := strconv.Atoi(digits)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("invalid --autocompact %q: must be a positive token count", s)
+	}
+	if n > math.MaxInt/mult {
+		return 0, fmt.Errorf("invalid --autocompact %q: too large", s)
+	}
+	return n * mult, nil
+}
+
+// CompactThreshold returns the per-run CompactTokens override when set, then
+// prefers user model overrides, spec model defaults, the user global
+// threshold, then the spec global default.
 func CompactThreshold(model Model) (int, error) {
+	if model.CompactTokens > 0 {
+		return model.CompactTokens, nil
+	}
 	var cfg compactConfig
 	home, err := os.UserHomeDir()
 	if err == nil {

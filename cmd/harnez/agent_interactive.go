@@ -154,7 +154,7 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 	if err := rejectBlockedSessionModel(sess, req.AllowExhaustedQuota, nil); err != nil {
 		return err
 	}
-	if warning, err := agent.CheckCostlyModel(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, req.AcceptCost, nil, time.Now()); err != nil {
+	if warning, err := agent.CheckCostlyModel(sessionModel(sess), req.AcceptCost, nil, time.Now()); err != nil {
 		return err
 	} else if warning != "" {
 		fmt.Fprintln(cmd.ErrOrStderr(), warning)
@@ -204,7 +204,7 @@ func interactiveOptions(cmd *cobra.Command, store *subagent.FileSessionStore, se
 	if err != nil {
 		return subagent.InteractiveOptions{}, err
 	}
-	return subagent.InteractiveOptions{Model: subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, Prompt: prompt, SessionID: sess.ID, Name: sess.Name, Dir: sess.WorkingDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: filepath.Join(storeDir, sess.ID+".sock"), Inbox: inbox, TurnState: subagent.NewTurnState(nil), Started: func(pid int) error {
+	return subagent.InteractiveOptions{Model: sessionModel(sess), Prompt: prompt, SessionID: sess.ID, Name: sess.Name, Dir: sess.WorkingDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: filepath.Join(storeDir, sess.ID+".sock"), Inbox: inbox, TurnState: subagent.NewTurnState(nil), Started: func(pid int) error {
 		sess.ProcessPID = pid
 		sess.ProcessStarttime = procs.ProcessStarttime(pid)
 		return store.Save(sess)

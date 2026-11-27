@@ -32,6 +32,7 @@ type Session struct {
 	Model             string `json:"model"`
 	ModelAlias        string `json:"model_alias,omitempty"`
 	Tier              string `json:"tier"`
+	CompactTokens     int    `json:"compact_tokens,omitempty"`
 	WorkingDir        string `json:"working_dir"`
 	ParentSessionID   string `json:"parent_session_id,omitempty"`
 	LastHostSessionID string `json:"last_host_session_id,omitempty"`
