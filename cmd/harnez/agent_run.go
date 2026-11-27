@@ -758,12 +758,14 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 	}
 	ctx = observeSessionProcess(ctx, s, id, nil)
 	driver := withAgyMeterSession(baseDriver, id)
-	if tcGuard != nil {
+	// Claude streams on the non-JSON path even without a tool limit, so the
+	// token watchdog sees live usage (ticket 1264 M1). --json stays batch until M2.
+	if tcGuard != nil || (m.Provider == "claude" && !req.JSON) {
 		driver = asStreamingDriverForToolLimit(driver)
-		if tcGuard.isPi {
-			driver = subagent.WithToolCallLimit(driver, tcGuard.cfg.Limit)
-			defer setToolCallEnv(tcGuard.cfg)()
-		}
+	}
+	if tcGuard != nil && tcGuard.isPi {
+		driver = subagent.WithToolCallLimit(driver, tcGuard.cfg.Limit)
+		defer setToolCallEnv(tcGuard.cfg)()
 	}
 	sd, canStream := driver.(subagent.StreamingDriver)
 	streaming := canStream && !req.JSON
@@ -875,6 +877,8 @@ func runStart(ctx context.Context, cmd *cobra.Command, d agentDeps, req startReq
 						sess.LastError = "runtime token watchdog interrupted the active turn"
 						sess.LastActiveAt = now
 						sess.Turn = turn
+						// The resume gate reads ContextTokens; store the crossing so it compacts first (1264 M1).
+						sess.ContextTokens = observedTokens
 						subagent.SyncCodexRolloutTotals(sess)
 						if saveErr := s.Save(sess); saveErr != nil {
 							return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
@@ -1132,12 +1136,13 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 			return fmt.Errorf("agent resume %q preflight: %w", sess.Name, err)
 		}
 		driver = withAgyMeterSession(baseDriver, sess.ID)
-		if tcGuard != nil {
+		// Claude streams on the non-JSON path so the token watchdog sees live usage (ticket 1264 M1).
+		if tcGuard != nil || (model.Provider == "claude" && !req.JSON) {
 			driver = asStreamingDriverForToolLimit(driver)
-			if tcGuard.isPi {
-				driver = subagent.WithToolCallLimit(driver, tcGuard.cfg.Limit)
-				defer setToolCallEnv(tcGuard.cfg)()
-			}
+		}
+		if tcGuard != nil && tcGuard.isPi {
+			driver = subagent.WithToolCallLimit(driver, tcGuard.cfg.Limit)
+			defer setToolCallEnv(tcGuard.cfg)()
 		}
 		// CheckResumable cannot tell a gone session from a lookup in another
 		// CODEX_HOME, so it refuses instead of starting fresh (issue 791).
@@ -1335,6 +1340,7 @@ func runResume(ctx context.Context, cmd *cobra.Command, d agentDeps, req resumeR
 					sess.ProcessPID = 0
 					sess.LastError = fmt.Sprintf("runtime token watchdog interrupted the active turn at %d tokens (limit %d)", observedTokens, threshold)
 					sess.LastActiveAt = time.Now()
+					sess.ContextTokens = observedTokens // the resume gate compacts before the next prompt (1264 M1)
 					subagent.SyncCodexRolloutTotals(sess)
 					if saveErr := s.Save(sess); saveErr != nil {
 						return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", sess.Name, observedTokens, threshold, saveErr)
