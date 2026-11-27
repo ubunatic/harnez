@@ -130,6 +130,11 @@ Live check (host, 2026-11-27 16:16 UTC, weekly window), first without the overri
    - a model mix that is not all Haiku;
    - cache-write TTL pricing.
    Reason from the code. The host does the hand check against taia's `cost-state`, because helpers must not read taia's state dir.
+   - **Host hand check (2026-11-27), resolved, no code change.**
+     - taia's `scripts/session-usage.sh` reports $2.0895 for 168 distinct calls, all Haiku. The figure comes from Claude Code's own `cost-state`. It counts 155k output tokens and 880k cache-write tokens.
+     - A recompute from the transcript with harnez's rule gives $2.4709. The rule is one record per message id (the max-output one), `spec/pricing.yaml` Haiku rates, and the 5x tier above 100k prompt tokens (109 of 168 calls). That equals the report's $2.47. The transcript has 1.22M cache-write tokens (all 1h) and 141k output tokens.
+     - The gap is Claude Code's counter, not harnez. Without the tier it would be $0.56, so the 5x tier is not what separates the two figures.
+     - The report shows 167 calls against 168 in the file. One message id is booked to another session, because the scan dedupes by message id across all sessions. That is existing behaviour.
 3. **Claim only in-range files.** Source: the agy:neon:low review, confirmed in the diff. `scan.go` sets `seenInDir[session]` before the `since` mtime filter. As a result, a stale copy in dir 1 claims the session and drops a newer in-range copy in dir 2.
    - Fix: set the claim only after the file passes `since`.
    - Test: a stale file in dir 1 and an in-range file in dir 2 with the same session id. The calls from dir 2 are counted.
