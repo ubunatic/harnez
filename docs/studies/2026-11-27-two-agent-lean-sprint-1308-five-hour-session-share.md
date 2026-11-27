@@ -23,3 +23,7 @@ tickets: [1308, 1300]
   weekly-equivalent pp; per-window weekly delta undefined; sum acceptance is not an identity; buckets weekly-only)
   and five design questions. Host decided all five in the ticket (contiguous weekly delta per window, capped
   windows count, quiet check via ratio, both factors at ≥ 1 weekly pp, sum as a reported gap).
+- Turn 2 (4m32s, peak 89.9k, one `make test-q1`, 83 ok): M1 84a0712c. Host live check: 5-hour shares + not
+  explained = 661 pp exactly; ratio 661/55 = 12.0 (M0 12.5); 59 of 123 sessions ≥ 1 5-hour pp (5 have ≥ 1 weekly
+  pp). A 1-call $0.0019 session takes a whole 2 pp rise until the M2 quiet check. Per-milestone Claude review
+  skipped to spare the weekly quota (92 %); one agy:neon:low review for M1+M2.

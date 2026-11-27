@@ -1,6 +1,6 @@
 # 1308 — usage history report: 5-hour share per session and a per-session factor that does not stop at 1 weekly pp
 
-**Status**: In Progress — M0 delivered (host), M1 next
+**Status**: In Progress — M1 delivered, M2 next
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -61,6 +61,17 @@ Plan accepted: parameterise the window selector (`isClaudeWeekly`, `windowStart`
 4. **Sessions with ≥ 1 weekly pp** keep the weekly factor and show the 5-hour factor beside it.
 5. **Acceptance restated:** Σ weekly-equivalent pp vs attributed weekly pp is a reported gap (print both and the difference), not an identity.
 6. M0 is re-measured on the installed binary after M2 with the code's definition; the host records it.
+
+### M1 delivered: 5-hour share per session (84a0712c)
+- Window selector (`weeklySel`/`fiveHourSel`) through one timeline path; `QUOTA 5H %` column, `five_hour_quota_pct`, `five_hour_rise_pct`, `five_hour_not_explained_pct`, `five_hour_intervals`; tests in `internal/usagereport/fiveh_test.go`. Dev: one `make test-q1`, 83 ok, 0 FAIL.
+- Host live check (installed binary, `--window weekly`): 303 5-hour rises, 661 pp; Σ session 5-hour shares 465 + not explained 196 = 661 (exact). Weekly 55 pp, 41 attributed, 14 not explained (14/55 = 25 %, 196/661 = 30 %: same order, as expected for account-wide windows). Rough ratio 661/55 = 12.0, M0 said 12.5. 59 of 123 sessions have ≥ 1 5-hour pp (today 5 have ≥ 1 weekly pp).
+- Implausible, expected until M2: with the quiet check off, session 25bf9316 (1 call, $0.0019) takes a whole 2.00 5-hour pp rise.
+
+**Pre-Work for M2 (host):**
+1. Quiet check on 5-hour rises via the ratio (decision 3). Regression test with the 25bf9316 shape: 2 5-hour pp, $0.0019 local, ratio 12, weekly plan 3,785,192 µUSD ⇒ 0.167 weekly-eq pp, plan $0.0063, factor 0.30 < `min_local_factor` 1 ⇒ quiet, no share. Near miss: the same rise at $0.0070 (factor 1.1) stays attributed.
+2. The per-window weekly-delta sum test deferred from M1 (decision 1).
+3. The text summary line under the table states the ratio, the number of 5-hour windows it used and `min_ratio_weekly_pct`; without a ratio it says why.
+4. Review: to spare the Claude weekly quota (92 % at 15:50 CET, resets 2026-11-28 11:00 UTC), no per-milestone Claude reviewer. One agy:neon:low one-shot review covers M1+M2 (separate agy plan). If the Claude weekly quota reaches 97 %, the host pauses the sprint.
 
 ### M1 — 5-hour share per session (Q2)
 - Run the same interval attribution on the Claude 5-hour window: resets every 5 hours are expected, not errors. Reuse the weekly code path; do not copy it.
