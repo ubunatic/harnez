@@ -12,6 +12,7 @@ import (
 func TestSessionExtractCommand(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	path := filepath.Join(home, ".claude", "projects", "slug", "test-session.jsonl")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)

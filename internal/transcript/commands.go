@@ -34,11 +34,16 @@ func ResolveCommands(id, provider string) (string, error) {
 	}
 	var matches []string
 	if provider == "" || provider == "claude" {
-		claude := os.Getenv("CLAUDE_CONFIG_DIR")
-		if claude == "" {
-			claude = filepath.Join(home, ".claude")
+		var dirs []string
+		if envDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); envDir != "" {
+			dirs = append(dirs, envDir)
 		}
-		files, err := usage.ClaudeTranscriptFiles(claude)
+		if cfgDirs, err := usage.ClaudeConfigDirs(); err == nil {
+			dirs = append(dirs, cfgDirs...)
+		} else if len(dirs) == 0 {
+			dirs = append(dirs, filepath.Join(home, ".claude"))
+		}
+		files, err := usage.ClaudeTranscriptFilesMulti(dirs)
 		if err != nil && !os.IsNotExist(err) {
 			return "", err
 		}

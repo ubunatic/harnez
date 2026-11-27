@@ -1,11 +1,9 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/transcript"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 func newSessionCmd() *cobra.Command {
@@ -29,11 +27,11 @@ Redirect output to a private file before reading bounded sections for a retro.
 Check the exit status before consuming output: errors can leave a partial extract.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			home, err := os.UserHomeDir()
+			dirs, err := usage.ClaudeConfigDirs()
 			if err != nil {
 				return err
 			}
-			path, err := transcript.Resolve(filepath.Join(home, ".claude"), args[0])
+			path, err := transcript.ResolveDirs(dirs, args[0])
 			if err != nil {
 				return err
 			}

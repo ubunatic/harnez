@@ -28,6 +28,12 @@ type Stats struct {
 // Resolve accepts a path or unique session ID prefix. Discovery uses the same
 // top-level Claude project sessions as usage attribution, never subagent files.
 func Resolve(claudeDir, id string) (string, error) {
+	return ResolveDirs([]string{claudeDir}, id)
+}
+
+// ResolveDirs accepts a path or unique session ID prefix across multiple Claude
+// config directories in list order, deduped by session ID.
+func ResolveDirs(dirs []string, id string) (string, error) {
 	if strings.TrimSpace(id) == "" {
 		return "", errors.New("session ID or path is required")
 	}
@@ -40,7 +46,7 @@ func Resolve(claudeDir, id string) (string, error) {
 	if strings.ContainsAny(id, `/\`) || strings.HasSuffix(id, ".jsonl") {
 		return "", fmt.Errorf("session file not found: %s", id)
 	}
-	files, err := usage.ClaudeTranscriptFiles(claudeDir)
+	files, err := usage.ClaudeTranscriptFilesMulti(dirs)
 	if err != nil {
 		return "", fmt.Errorf("discover Claude sessions: %w", err)
 	}

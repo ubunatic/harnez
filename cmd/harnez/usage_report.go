@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -66,11 +64,10 @@ func parseReportSince(s string) (time.Duration, error) {
 }
 
 func runUsageReport(w io.Writer, f usageReportFlags) error {
-	home, err := os.UserHomeDir()
+	dirs, err := usage.ClaudeConfigDirs()
 	if err != nil {
 		return err
 	}
-	projectsDir := filepath.Join(home, ".claude", "projects")
 	historyDir := usage.HistoryDir("")
 	samples, err := usage.ReadQuotaHistory(historyDir)
 	if err != nil {
@@ -131,7 +128,7 @@ func runUsageReport(w io.Writer, f usageReportFlags) error {
 	if err != nil {
 		return err
 	}
-	calls, err := usagereport.ScanCalls(projectsDir, since)
+	calls, warnings, err := usagereport.ScanDirs(dirs, since)
 	if err != nil {
 		return fmt.Errorf("read claude transcripts: %w", err)
 	}
@@ -140,6 +137,7 @@ func runUsageReport(w io.Writer, f usageReportFlags) error {
 		ResetTolerance: resetTol, WeeklyPlanMicros: weekly, VATRate: vat,
 		UnexplainedTolerancePct: unexplainedTol, MinSessionQuotaPct: minSession, MinLocalFactor: minLocal,
 		MinRatioWeeklyPct: minRatio, MinSessionFiveHourPct: minSession5h,
+		Warnings: warnings,
 	})
 	if f.JSON {
 		return usagereport.RenderJSON(w, rep)

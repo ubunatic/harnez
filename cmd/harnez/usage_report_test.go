@@ -19,6 +19,7 @@ func reportFixture(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
 	now := time.Now().UTC()
 	at := now.Add(-time.Hour).Format(time.RFC3339Nano)
@@ -96,6 +97,77 @@ func TestUsageReportCLIWindowWeekly(t *testing.T) {
 	}
 	if !strings.Contains(out, "window (all local calls") {
 		t.Fatalf("no window line:\n%s", out)
+	}
+}
+
+func TestUsageReportCLI_MultiDirOverride(t *testing.T) {
+	reportFixture(t)
+	home := os.Getenv("HOME")
+	xdg := os.Getenv("XDG_CONFIG_HOME")
+	cfgDir := filepath.Join(xdg, "harnez")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "local.yaml"),
+		[]byte("usage:\n  claude_config_dirs:\n    - ~/.claude\n    - ~/.local/state/extra/claude\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	at := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano)
+	extra := filepath.Join(home, ".local", "state", "extra", "claude", "projects", "-work-proj")
+	if err := os.MkdirAll(extra, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// s1 duplicates ~/.claude/projects/.../s1.jsonl and must be ignored; s2 is unique to extra.
+	dup := `{"type":"assistant","timestamp":"` + at + `","message":{"id":"m99","model":"claude-sonnet-5-5","usage":{"input_tokens":9999999,"output_tokens":0}}}` + "\n"
+	uniq := `{"type":"assistant","timestamp":"` + at + `","message":{"id":"m2","model":"claude-sonnet-5-5","usage":{"input_tokens":500000,"output_tokens":0}}}` + "\n"
+	if err := os.WriteFile(filepath.Join(extra, "s1.jsonl"), []byte(dup), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extra, "s2.jsonl"), []byte(uniq), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runReport(t, "--since", "7d", "--json")
+	if err != nil {
+		t.Fatalf("report --json: %v\n%s", err, out)
+	}
+	var rep struct {
+		Sessions []struct {
+			Session string `json:"session"`
+			Source  string `json:"source"`
+			Input   int64  `json:"input_tokens"`
+		} `json:"sessions"`
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("json: %v\n%s", err, out)
+	}
+	if len(rep.Sessions) != 2 {
+		t.Fatalf("sessions = %+v, want 2", rep.Sessions)
+	}
+	byID := map[string]struct {
+		source string
+		input  int64
+	}{}
+	for _, s := range rep.Sessions {
+		byID[s.Session] = struct {
+			source string
+			input  int64
+		}{s.Source, s.Input}
+	}
+	if byID["s1"].source != "~/.claude" || byID["s1"].input != 1000000 {
+		t.Fatalf("s1 = %+v, want ~/.claude and 1000000", byID["s1"])
+	}
+	if byID["s2"].source != "~/.local/state/extra/claude" || byID["s2"].input != 500000 {
+		t.Fatalf("s2 = %+v, want ~/.local/state/extra/claude and 500000", byID["s2"])
+	}
+
+	textOut, err := runReport(t, "--since", "7d")
+	if err != nil {
+		t.Fatalf("report text: %v\n%s", err, textOut)
+	}
+	if !strings.Contains(textOut, "SOURCE") || !strings.Contains(textOut, "~/.local/state/extra/claude") {
+		t.Fatalf("text output missing SOURCE or extra source:\n%s", textOut)
 	}
 }
 

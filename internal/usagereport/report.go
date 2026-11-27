@@ -30,6 +30,7 @@ var (
 // means unpriced (unknown model or no cache-write TTL split), never zero.
 type Call struct {
 	Session    string                `json:"session"`
+	Source     string                `json:"source,omitempty"`
 	MessageID  string                `json:"message_id"`
 	At         time.Time             `json:"at"`
 	Usage      subagent.RequestUsage `json:"usage"`
@@ -54,6 +55,7 @@ type Interval struct {
 // SessionRow is one session's (or the totals') numbers. Nil means n/a.
 type SessionRow struct {
 	Session       string `json:"session"`
+	Source        string `json:"source,omitempty"`
 	Calls         int    `json:"calls"`
 	Input         int64  `json:"input_tokens"`
 	Output        int64  `json:"output_tokens"`
@@ -110,6 +112,7 @@ type Options struct {
 	MinSessionFiveHourPct float64
 	// Location is the zone for the hour of day; nil means the local zone.
 	Location *time.Location
+	Warnings []string
 }
 
 // Buckets is where each priced in-range call's cost lands (M4). Every call is
@@ -141,6 +144,7 @@ type Report struct {
 	Until          time.Time    `json:"until"`
 	Sessions       []SessionRow `json:"sessions"`
 	Totals         SessionRow   `json:"totals"`
+	Warnings       []string     `json:"warnings,omitempty"`
 	RisePct        float64      `json:"weekly_rise_pct"`
 	UnexplainedPct float64      `json:"not_explained_locally_pct"`
 	Unexplained    bool         `json:"not_explained_locally"`
@@ -211,7 +215,7 @@ type inRise struct {
 // [Since, Until] are ignored. A rise is kept when it ends inside the range;
 // attribution uses every session's calls, and Session only narrows the rows.
 func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report {
-	rep := Report{Since: opts.Since, Until: opts.Until, Sessions: []SessionRow{}, Session: opts.Session, PlanPriced: opts.WeeklyPlanMicros != nil}
+	rep := Report{Since: opts.Since, Until: opts.Until, Sessions: []SessionRow{}, Session: opts.Session, PlanPriced: opts.WeeklyPlanMicros != nil, Warnings: opts.Warnings}
 	var inRange []Call
 	for _, c := range calls {
 		if c.At.IsZero() || c.At.Before(opts.Since) || c.At.After(opts.Until) {
@@ -292,7 +296,7 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 	for _, c := range inRange {
 		row, ok := rows[c.Session]
 		if !ok {
-			row = &SessionRow{Session: c.Session}
+			row = &SessionRow{Session: c.Session, Source: c.Source}
 			rows[c.Session] = row
 			order = append(order, c.Session)
 		}
