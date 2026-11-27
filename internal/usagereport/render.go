@@ -25,25 +25,27 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 		fmt.Fprintln(w, "no Claude calls in range")
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', tabwriter.AlignRight)
-	fmt.Fprintln(tw, "SESSION\tCALLS\tIN\tOUT\tCACHE-READ\tCACHE-WRITE\tAPI $\tATTRIB $\tUNATTRIB $\tQUOTA %\tQUOTA 5H %\tPLAN NET $\tPLAN GROSS $\tFACTOR\t")
+	fmt.Fprintln(tw, "SESSION\tCALLS\tIN\tOUT\tCACHE-READ\tCACHE-WRITE\tAPI $\tATTRIB $\tUNATTRIB $\tQUOTA %\tQUOTA 5H %\t5H W-EQ %\tPLAN NET $\tPLAN GROSS $\tFACTOR\t5H FACTOR\t")
 	for _, r := range rep.Sessions {
-		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
+		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
 			r.Session, r.Calls, r.Input, r.Output, r.CacheRead, r.CacheWrite,
 			money(r.APICostMicros), money(r.AttributedCostMicros), money(r.UnattributedCostMicros),
-			percent(r.QuotaPct), percent(r.FiveHourQuotaPct), money(r.PlanNetMicros), money(r.PlanGrossMicros),
-			sessionFactor(r, rep))
+			percent(r.QuotaPct), percent(r.FiveHourQuotaPct), percent(r.FiveHourWeeklyEqPct),
+			money(r.PlanNetMicros), money(r.PlanGrossMicros),
+			sessionFactor(r, rep), fiveHourFactor(r, rep))
 	}
 	t := rep.Totals
-	fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
+	fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
 		t.Session, t.Calls, t.Input, t.Output, t.CacheRead, t.CacheWrite,
 		money(t.APICostMicros), money(t.AttributedCostMicros), money(t.UnattributedCostMicros),
-		percent(t.QuotaPct), percent(t.FiveHourQuotaPct), money(t.PlanNetMicros), money(t.PlanGrossMicros), factor(t.Factor))
+		percent(t.QuotaPct), percent(t.FiveHourQuotaPct), percent(t.FiveHourWeeklyEqPct),
+		money(t.PlanNetMicros), money(t.PlanGrossMicros), factor(t.Factor), factor(t.FiveHourFactor))
 	if err := tw.Flush(); err != nil {
 		return err
 	}
 	if rep.FiveHourIntervals > 0 {
-		fmt.Fprintf(w, "5-hour window: %d rise(s), %.2f pp in range, %.2f pp not explained locally; QUOTA 5H %% is the share of those rises (no factor yet, ticket 1308 M2)\n",
-			rep.FiveHourIntervals, rep.FiveHourRisePct, rep.FiveHourNotExplainedPct)
+		fmt.Fprintf(w, "5-hour window: %d rise(s), %.2f pp in range, %.2f pp not explained locally; %s\n",
+			rep.FiveHourIntervals, rep.FiveHourRisePct, rep.FiveHourNotExplainedPct, fiveHourRatioLine(rep))
 	}
 	if rep.Window != nil {
 		fmt.Fprintf(w, "window (all local calls / weekly rise %.2f pp): API $%s, factor %s; an upper bound on local quota, other machines add to the rise\n",
@@ -63,8 +65,14 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 		fmt.Fprintf(w, "unpriced calls: %d (no price); their sessions show n/a for API $, ATTRIB $, UNATTRIB $ and FACTOR\n", rep.UnpricedCalls)
 	}
 	fmt.Fprintln(w, "legend: ATTRIB $ = API cost of calls in a quota rise (the factor's base); UNATTRIB $ = API $ - ATTRIB $ (quiet, before first sample, after an older window, pending); FACTOR = ATTRIB $ / plan net for the same quota %")
+	if rep.FiveHourIntervals > 0 {
+		fmt.Fprintln(w, "legend: 5H W-EQ % = 5-hour pp / range ratio (weekly-equivalent pp); 5H FACTOR = API $ / plan net for the W-EQ %; basis measured = most of the share came from calls alone in their rise, split = shared with other sessions or models")
+	}
 	if len(rep.Intervals) == 0 {
 		fmt.Fprintln(w, "quota: no weekly history in range; quota, plan and factor are n/a")
+	}
+	if err := renderModels(w, rep); err != nil {
+		return err
 	}
 	if err := renderHours(w, rep); err != nil {
 		return err
@@ -154,6 +162,50 @@ func sessionFactor(r SessionRow, rep Report) string {
 		return fmt.Sprintf("n/a (< %g pp)", rep.MinSessionQuotaPct)
 	}
 	return factor(r.Factor)
+}
+
+// fiveHourRatioLine words the range ratio, or says why there is none.
+func fiveHourRatioLine(rep Report) string {
+	if rep.FiveHourRatio == nil {
+		return fmt.Sprintf("no range ratio (no 5-hour window with a weekly rise of at least %g pp), so no weekly-equivalent pp, 5-hour factor or quiet check", rep.MinRatioWeeklyPct)
+	}
+	eq := 0.0
+	if rep.Totals.FiveHourWeeklyEqPct != nil {
+		eq = *rep.Totals.FiveHourWeeklyEqPct
+	}
+	attrib := 0.0
+	if rep.Totals.QuotaPct != nil {
+		attrib = *rep.Totals.QuotaPct
+	}
+	return fmt.Sprintf("range ratio %.3f 5-hour pp per weekly pp from %d window(s) with a weekly rise of at least %g pp; weekly-equivalent %.2f pp vs %.2f pp weekly attributed (gap %.2f pp)",
+		*rep.FiveHourRatio, rep.FiveHourRatioWindows, rep.MinRatioWeeklyPct, eq, attrib, eq-attrib)
+}
+
+// fiveHourFactor prints a session's 5-hour factor with its basis. "n/a" stays plain.
+func fiveHourFactor(r SessionRow, rep Report) string {
+	if r.FiveHourFactor == nil {
+		if r.FiveHourWeeklyEqPct != nil && r.FiveHourQuotaPct != nil && *r.FiveHourQuotaPct < rep.MinSessionFiveHourPct {
+			return fmt.Sprintf("n/a (< %g pp)", rep.MinSessionFiveHourPct)
+		}
+		return "n/a"
+	}
+	return fmt.Sprintf("%.2fx %s", *r.FiveHourFactor, r.FiveHourFactorBasis)
+}
+
+// renderModels writes the per-model rollup of the range (M2).
+func renderModels(w io.Writer, rep Report) error {
+	if len(rep.Models) == 0 {
+		return nil
+	}
+	fmt.Fprintln(w, "models in range:")
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', tabwriter.AlignRight)
+	fmt.Fprintln(tw, "MODEL\tCALLS\tAPI $\tATTRIB $\tQUOTA 5H %\t5H W-EQ %\tPLAN NET $\tSOLO RISES\tFACTOR\t")
+	for _, m := range rep.Models {
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%.2f\t%s\t%s\t%d\t%s\t\n",
+			m.Model, m.Calls, money(m.APICostMicros), money(&m.AttributedCostMicros), m.FiveHourQuotaPct,
+			percent(m.FiveHourWeeklyEqPct), money(m.PlanNetMicros), m.SoloRises, factor(m.Factor))
+	}
+	return tw.Flush()
 }
 
 func factor(v *float64) string {

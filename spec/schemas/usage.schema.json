@@ -77,11 +77,13 @@
     },
     "usage_report": {
       "type": "object",
-      "required": ["unexplained_tolerance_pct", "min_session_quota_pct", "min_local_factor"],
+      "required": ["unexplained_tolerance_pct", "min_session_quota_pct", "min_local_factor", "min_ratio_weekly_pct", "min_session_five_hour_pct"],
       "properties": {
         "unexplained_tolerance_pct": { "type": "number", "minimum": 0, "maximum": 100 },
         "min_session_quota_pct": { "type": "number", "minimum": 0, "maximum": 100 },
-        "min_local_factor": { "type": "number", "minimum": 0 }
+        "min_local_factor": { "type": "number", "minimum": 0 },
+        "min_ratio_weekly_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "min_session_five_hour_pct": { "type": "number", "minimum": 0, "maximum": 100 }
       },
       "additionalProperties": false
     },

@@ -49,6 +49,12 @@ usage_report:
   # the next is 1.1, then 3.29 and up. Below 1x the local API cost is less than
   # the plan cost of the same quota, which cannot drive a rise (median 61x).
   min_local_factor: 1
+  # 5-hour window (ticket 1308 M2): the range ratio (5-hour pp per weekly pp) uses only
+  # 5-hour windows whose weekly rise is at least this many pp; 1-4 pp windows are noise.
+  min_ratio_weekly_pct: 4
+  # A session gets a 5-hour factor only when its 5-hour share is at least this many pp
+  # (one 5-hour quota step). Below it the factor is n/a with that reason.
+  min_session_five_hour_pct: 1
 collector_timeout: 2m
 passive_dedupe_interval: 30s
 passive_update_path: /usage/passive

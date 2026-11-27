@@ -94,6 +94,29 @@ type usageReportSpec struct {
 	UnexplainedTolerancePct *float64 `yaml:"unexplained_tolerance_pct"`
 	MinSessionQuotaPct      *float64 `yaml:"min_session_quota_pct"`
 	MinLocalFactor          *float64 `yaml:"min_local_factor"`
+	MinRatioWeeklyPct       *float64 `yaml:"min_ratio_weekly_pct"`
+	MinSessionFiveHourPct   *float64 `yaml:"min_session_five_hour_pct"`
+}
+
+// ReportFiveHourSpec returns usage_report.min_ratio_weekly_pct and
+// usage_report.min_session_five_hour_pct from spec/usage.yaml (ticket 1308 M2).
+// A missing value is an error.
+func ReportFiveHourSpec() (minRatioWeeklyPct, minSessionFiveHourPct float64, err error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, usageSpecPath)
+	if err != nil {
+		return 0, 0, err
+	}
+	var spec usageSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return 0, 0, err
+	}
+	if spec.UsageReport.MinRatioWeeklyPct == nil {
+		return 0, 0, fmt.Errorf("usage_report.min_ratio_weekly_pct is missing")
+	}
+	if spec.UsageReport.MinSessionFiveHourPct == nil {
+		return 0, 0, fmt.Errorf("usage_report.min_session_five_hour_pct is missing")
+	}
+	return *spec.UsageReport.MinRatioWeeklyPct, *spec.UsageReport.MinSessionFiveHourPct, nil
 }
 
 // ReportMinLocalFactor returns usage_report.min_local_factor from

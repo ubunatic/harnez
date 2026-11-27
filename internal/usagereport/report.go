@@ -69,6 +69,14 @@ type SessionRow struct {
 	// FiveHourQuotaPct is the session's share of the 5-hour window's rises, split
 	// by API cost as the weekly share is (ticket 1308 M1). Nil without 5-hour history.
 	FiveHourQuotaPct *float64 `json:"five_hour_quota_pct,omitempty"`
+	// FiveHourWeeklyEqPct is the 5-hour share over the range ratio: the weekly pp
+	// it stands for. FiveHourFactor is attributed API cost over that plan cost.
+	FiveHourWeeklyEqPct *float64 `json:"five_hour_weekly_eq_pct,omitempty"`
+	FiveHourFactor      *float64 `json:"five_hour_subsidy_factor,omitempty"`
+	// FactorBasis is "measured" when at least half the factor's share comes from
+	// rises where the session was the only one with calls, else "split" (M2).
+	FactorBasis         string `json:"factor_basis,omitempty"`
+	FiveHourFactorBasis string `json:"five_hour_factor_basis,omitempty"`
 	// UnpricedCalls counts the session's calls without a price (M4): a session
 	// with any has no API, attributed or pending cost and no factor.
 	UnpricedCalls   int      `json:"unpriced_calls,omitempty"`
@@ -94,6 +102,12 @@ type Options struct {
 	// over its plan cost is below this is quiet, not explained locally (M4).
 	// Zero turns the check off.
 	MinLocalFactor float64
+	// MinRatioWeeklyPct is usage_report.min_ratio_weekly_pct: a 5-hour window enters
+	// the range ratio only when its weekly rise is at least this (ticket 1308 M2).
+	MinRatioWeeklyPct float64
+	// MinSessionFiveHourPct is usage_report.min_session_five_hour_pct: a session
+	// gets a 5-hour factor only at or above this 5-hour share.
+	MinSessionFiveHourPct float64
 	// Location is the zone for the hour of day; nil means the local zone.
 	Location *time.Location
 }
@@ -158,6 +172,13 @@ type Report struct {
 	FiveHourRisePct         float64 `json:"five_hour_rise_pct"`
 	FiveHourNotExplainedPct float64 `json:"five_hour_not_explained_pct"`
 	FiveHourIntervals       int     `json:"five_hour_intervals"`
+	// FiveHourRatio is the range ratio, 5-hour pp per weekly pp (ticket 1308 M2);
+	// nil when no window qualifies. FiveHourRatioWindows counts the windows used.
+	FiveHourRatio         *float64   `json:"five_hour_ratio,omitempty"`
+	FiveHourRatioWindows  int        `json:"five_hour_ratio_windows"`
+	MinRatioWeeklyPct     float64    `json:"min_ratio_weekly_pct"`
+	MinSessionFiveHourPct float64    `json:"min_session_five_hour_pct"`
+	Models                []ModelRow `json:"models"`
 }
 
 // HourRow is one local hour of day. Nil means n/a: no attributed cost in the
@@ -209,6 +230,11 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 	rep.FiveHourRisePct = five.pct
 	rep.FiveHourNotExplainedPct = five.notExplained
 	rep.FiveHourIntervals = five.intervals
+	rep.FiveHourRatio = five.ratioPtr()
+	rep.FiveHourRatioWindows = five.ratioWindows
+	rep.MinRatioWeeklyPct = opts.MinRatioWeeklyPct
+	rep.MinSessionFiveHourPct = opts.MinSessionFiveHourPct
+	rep.Models = modelRows(inRange, five, opts)
 
 	// Every priced call lands in exactly one bucket (M4 item 3): a kept rise's
 	// calls are attributed below, the rest are binned by the span that holds them.
@@ -257,6 +283,7 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		}
 	}
 	rep.Unexplained = rep.UnexplainedPct > opts.UnexplainedTolerancePct
+	soloW := soloShares(rises)
 	rep.Series, rep.Hours = hourlyView(rises, opts)
 
 	rows := map[string]*SessionRow{}
@@ -319,6 +346,10 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 			row.UnattributedCostMicros = &unattr
 		}
 		finishPlan(row, opts, true)
+		if row.Factor != nil {
+			row.FactorBasis = basisOf(soloW[s], pct[s])
+		}
+		finishFiveHour(row, five, opts)
 		rep.Sessions = append(rep.Sessions, *row)
 		rep.Totals.Calls += row.Calls
 		rep.Totals.Input += row.Input
@@ -345,6 +376,10 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 	}
 	if len(five.shares) > 0 {
 		rep.Totals.FiveHourQuotaPct = &fiveTotal
+		if five.ratioOK() {
+			eq := fiveTotal / five.ratio
+			rep.Totals.FiveHourWeeklyEqPct = &eq
+		}
 	}
 	finishPlan(&rep.Totals, opts, false)
 	rep.Window = windowLine(rep.RisePct, inRange, hasHistory, opts)
@@ -446,50 +481,6 @@ func finishPlan(row *SessionRow, opts Options, perSession bool) {
 	row.Factor = &f
 }
 
-// windowShare is one window's measured rises in range: their percentage points,
-// the points no call explains, each session's share and the rise count.
-type windowShare struct {
-	pct, notExplained float64
-	shares            map[string]float64
-	intervals         int
-}
-
-// fiveHourShare measures the 5-hour window's rises through the same timeline as
-// the weekly report and splits each attributed rise across sessions by cost.
-// The quiet check is off (MinLocalFactor 0): it needs the weekly-equivalent
-// ratio (M2). A rise is kept when it ends inside the range, as weekly rises are.
-func fiveHourShare(samples []usage.QuotaHistoryEntry, inRange []Call, keep func(Interval) bool, opts Options) windowShare {
-	tl := buildTimeline(samples, opts.ResetTolerance, fiveHourSel)
-	riseCalls := make([][]Call, len(tl.rises))
-	for _, c := range inRange {
-		if c.CostMicros == nil {
-			continue
-		}
-		if sp, ok := tl.spanAt(c.At); ok && sp.kind == spanRise {
-			riseCalls[sp.rise] = append(riseCalls[sp.rise], c)
-		}
-	}
-	local := opts
-	local.MinLocalFactor = 0
-	out := windowShare{shares: map[string]float64{}}
-	for r, iv := range tl.rises {
-		if !keep(iv) {
-			continue
-		}
-		attribute(&iv, riseCalls[r], local)
-		out.intervals++
-		out.pct += iv.DeltaPct
-		if !iv.Attributed {
-			out.notExplained += iv.DeltaPct
-			continue
-		}
-		for s, sh := range iv.Share {
-			out.shares[s] += sh
-		}
-	}
-	return out
-}
-
 // windowLine sums every local call in range (all sessions, priced) against the
 // whole weekly rise. It is nil without weekly history or with an unpriced call.
 func windowLine(risePct float64, calls []Call, hasHistory bool, opts Options) *WindowLine {
@@ -511,6 +502,12 @@ func windowLine(risePct float64, calls []Call, hasHistory bool, opts Options) *W
 // (local cost below min_local_factor of its plan cost, M4 item 5) is not
 // attributed either: it gets no share and the caller counts its cost as quiet.
 func attribute(iv *Interval, calls []Call, opts Options) {
+	attributeWith(iv, calls, opts, iv.DeltaPct)
+}
+
+// attributeWith is attribute with the quiet check on quietPct instead of the
+// rise's own pp: the 5-hour window passes its weekly-equivalent pp (M2).
+func attributeWith(iv *Interval, calls []Call, opts Options, quietPct float64) {
 	var total int64
 	costs := map[string]int64{}
 	for _, c := range calls {
@@ -520,7 +517,7 @@ func attribute(iv *Interval, calls []Call, opts Options) {
 	if total == 0 {
 		return
 	}
-	if f := factorOf(total, iv.DeltaPct, opts.WeeklyPlanMicros); f != nil && *f < opts.MinLocalFactor {
+	if f := factorOf(total, quietPct, opts.WeeklyPlanMicros); f != nil && *f < opts.MinLocalFactor {
 		return
 	}
 	iv.Attributed = true
