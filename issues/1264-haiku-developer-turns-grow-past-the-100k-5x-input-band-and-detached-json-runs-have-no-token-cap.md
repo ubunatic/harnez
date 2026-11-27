@@ -60,3 +60,16 @@ Searcher (2026-11-27, current lines): streaming gate `cmd/harnez/agent_run.go:76
 - **M3 (docs):** `docs/AutoCompaction.md:13-15` and `docs/HarnezAgentArchitecture.md` describe the real behaviour; the host reruns the canary for both modes.
 
 New spec values, if any, go in `spec/agent.yaml` with schema (`docs/Spec.md`).
+
+## Decision (host, decide mode, M1 plan review 2026-11-27)
+
+Developer plan (dev-1264, haiku:high): the watchdog is never armed for Claude because `subagent.DriverFor` returns the batch `ClaudeDriver` (`internal/subagent/driver.go:44-45`) and only the tool-call guard upgrades it to the stream driver (`cmd/harnez/agent_run.go:761-762`); the parser already sums input + cache read + cache write per assistant line (`internal/subagent/claude.go:387-388`).
+
+- **Canary args:** no `--max-tool-calls`, no tool-call limit. The root cause stands.
+- **Arm the watchdog** whenever the driver can stream and the threshold is > 0, independent of `--json` and tool limits; TUI output stays streaming-only.
+- **Stop, do not let the turn finish:** each later request in the turn pays 5x. Persist the observed count as the session's `ContextTokens` so the next resume's pre-prompt gate compacts.
+- **Stop mechanism:** keep the existing process-group kill in M1. The M3 canary checks that a resume after the stop works (dangling `tool_use`); if it does not, SIGINT plus `auto_compact.watchdog_grace_ms` becomes pre-work.
+- **`--json` stop output:** one JSON document with status `stopped` on stdout, the message on stderr, non-zero exit.
+- **No auto-resume** after a stop; the caller (host) resumes.
+- **Fixture provenance:** the developer may capture one live `claude -p --output-format stream-json --verbose` run with a tiny prompt (stdout only, never `~/.claude`) and base the fixture on it.
+- **Peak field:** `peak_context_tokens` on the turn record and JSON output, shown in `[done:]` (M2).
