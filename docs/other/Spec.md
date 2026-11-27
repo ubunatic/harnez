@@ -39,6 +39,15 @@ also as leading `VAR=val` prefixes on the command. Precedence is flag, then
 environment or prefix, then spec. A TTY stdout is left uncapped unless the cap is
 forced. Issue 771 records the decision.
 
+### Usage config dirs
+
+`spec/usage.yaml` defines `claude_config_dirs` (default `["~/.claude"]`,
+validated by `spec/schemas/usage.schema.json`). Set `usage.claude_config_dirs`
+in `~/.config/harnez/local.yaml` to override it; a non-empty override replaces
+the spec list, so list `~/.claude` first when keeping it (an empty list falls
+back to the spec default). Readers expand leading `~` and dedupe sessions by
+session ID in list order (first directory wins).
+
 ### Project-local Harnez configuration
 Harnez repositories may also contain `.harnez/repo.yaml`, validated by
 `spec/schemas/repo.schema.json`. This is runtime project configuration, not an

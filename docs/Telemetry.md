@@ -258,9 +258,16 @@ claiming a saving. Schema version 12 (issue 1215) extends
 
 ## Claude Range Report (`harnez usage history report`, issue 1302)
 
-Read-only. Tokens come from the Claude transcripts under `~/.claude/projects`
-(main sessions and nested `<session>/subagents/*.jsonl`), one call per message
-id, the final streamed usage kept. Each call is priced by its own model
+Read-only. Tokens come from the Claude transcripts under `projects/` in each
+directory listed by `claude_config_dirs` in `spec/usage.yaml` (default
+`["~/.claude"]`; main sessions and nested `<session>/subagents/*.jsonl`), one
+call per message id, the final streamed usage kept. Override with
+`usage.claude_config_dirs` in `~/.config/harnez/local.yaml`: the override
+replaces the spec list, so list `~/.claude` first when keeping it. Sessions
+are deduped by session ID across directories (first directory with an in-range
+file wins); missing or unreadable directories are skipped with a `note:` line
+(`warnings` in `--json`), not an error. Each session row carries its
+`~`-contracted directory in the `SOURCE` column (`source` in `--json`). Each call is priced by its own model
 (`telemetry.ClaudeCallPricing`). The quota share comes only from Claude's weekly
 window in `quota-history.jsonl` (agent `claude`, no group, window
 `usage.ClaudeWeeklyWindowName`), grouped into windows by `reset_at` within
