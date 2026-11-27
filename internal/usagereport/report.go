@@ -14,7 +14,17 @@ import (
 	"ubunatic.com/harnez/internal/usage"
 )
 
-const weeklyWindowLength = 7 * 24 * time.Hour
+// windowSel names one Claude quota window in quota history and its length. The
+// weekly report and the 5-hour share run the same timeline path (ticket 1308 M1).
+type windowSel struct {
+	name   string
+	length time.Duration
+}
+
+var (
+	weeklySel   = windowSel{usage.ClaudeWeeklyWindowName, 7 * 24 * time.Hour}
+	fiveHourSel = windowSel{usage.ClaudeFiveHourWindowName, 5 * time.Hour}
+)
 
 // Call is one deduplicated Claude API call. CostMicros is filled by Build; nil
 // means unpriced (unknown model or no cache-write TTL split), never zero.
@@ -56,6 +66,9 @@ type SessionRow struct {
 	AttributedCostMicros   *int64   `json:"attributed_api_cost_micros_usd,omitempty"`
 	UnattributedCostMicros *int64   `json:"unattributed_api_cost_micros_usd,omitempty"`
 	QuotaPct               *float64 `json:"quota_pct,omitempty"`
+	// FiveHourQuotaPct is the session's share of the 5-hour window's rises, split
+	// by API cost as the weekly share is (ticket 1308 M1). Nil without 5-hour history.
+	FiveHourQuotaPct *float64 `json:"five_hour_quota_pct,omitempty"`
 	// UnpricedCalls counts the session's calls without a price (M4): a session
 	// with any has no API, attributed or pending cost and no factor.
 	UnpricedCalls   int      `json:"unpriced_calls,omitempty"`
@@ -139,6 +152,12 @@ type Report struct {
 	UnpricedCalls int `json:"unpriced_calls,omitempty"`
 	// Buckets splits the priced in-range API cost (M4), over all sessions.
 	Buckets Buckets `json:"buckets"`
+	// FiveHourRisePct is the 5-hour window's rise in range; FiveHourNotExplainedPct
+	// is the part no session's calls explain (no priced call, or no cost). The
+	// 5-hour share has no weekly-equivalent check yet (M2), so it is not quiet-tested.
+	FiveHourRisePct         float64 `json:"five_hour_rise_pct"`
+	FiveHourNotExplainedPct float64 `json:"five_hour_not_explained_pct"`
+	FiveHourIntervals       int     `json:"five_hour_intervals"`
 }
 
 // HourRow is one local hour of day. Nil means n/a: no attributed cost in the
@@ -183,9 +202,13 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		}
 		inRange = append(inRange, c)
 	}
-	tl := buildTimeline(samples, opts.ResetTolerance)
+	tl := buildTimeline(samples, opts.ResetTolerance, weeklySel)
 	rep.SkippedSamples = tl.skipped
 	keep := func(iv Interval) bool { return !iv.End.Before(opts.Since) && !iv.End.After(opts.Until) }
+	five := fiveHourShare(samples, inRange, keep, opts)
+	rep.FiveHourRisePct = five.pct
+	rep.FiveHourNotExplainedPct = five.notExplained
+	rep.FiveHourIntervals = five.intervals
 
 	// Every priced call lands in exactly one bucket (M4 item 3): a kept rise's
 	// calls are attributed below, the rest are binned by the span that holds them.
@@ -254,6 +277,7 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 		}
 	}
 	pct := map[string]float64{}
+	var fiveTotal float64
 	attributed := map[string]int64{}
 	for _, r := range rises {
 		for s, share := range r.iv.Share {
@@ -283,6 +307,10 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 			row.QuotaPct = &p
 			totalPct += p
 			anyAttributed = true
+		}
+		if p, ok := five.shares[s]; ok {
+			row.FiveHourQuotaPct = &p
+			fiveTotal += p
 		}
 		if hasHistory && priced {
 			a := attributed[s]
@@ -314,6 +342,9 @@ func Build(calls []Call, samples []usage.QuotaHistoryEntry, opts Options) Report
 	}
 	if anyAttributed {
 		rep.Totals.QuotaPct = &totalPct
+	}
+	if len(five.shares) > 0 {
+		rep.Totals.FiveHourQuotaPct = &fiveTotal
 	}
 	finishPlan(&rep.Totals, opts, false)
 	rep.Window = windowLine(rep.RisePct, inRange, hasHistory, opts)
@@ -415,6 +446,50 @@ func finishPlan(row *SessionRow, opts Options, perSession bool) {
 	row.Factor = &f
 }
 
+// windowShare is one window's measured rises in range: their percentage points,
+// the points no call explains, each session's share and the rise count.
+type windowShare struct {
+	pct, notExplained float64
+	shares            map[string]float64
+	intervals         int
+}
+
+// fiveHourShare measures the 5-hour window's rises through the same timeline as
+// the weekly report and splits each attributed rise across sessions by cost.
+// The quiet check is off (MinLocalFactor 0): it needs the weekly-equivalent
+// ratio (M2). A rise is kept when it ends inside the range, as weekly rises are.
+func fiveHourShare(samples []usage.QuotaHistoryEntry, inRange []Call, keep func(Interval) bool, opts Options) windowShare {
+	tl := buildTimeline(samples, opts.ResetTolerance, fiveHourSel)
+	riseCalls := make([][]Call, len(tl.rises))
+	for _, c := range inRange {
+		if c.CostMicros == nil {
+			continue
+		}
+		if sp, ok := tl.spanAt(c.At); ok && sp.kind == spanRise {
+			riseCalls[sp.rise] = append(riseCalls[sp.rise], c)
+		}
+	}
+	local := opts
+	local.MinLocalFactor = 0
+	out := windowShare{shares: map[string]float64{}}
+	for r, iv := range tl.rises {
+		if !keep(iv) {
+			continue
+		}
+		attribute(&iv, riseCalls[r], local)
+		out.intervals++
+		out.pct += iv.DeltaPct
+		if !iv.Attributed {
+			out.notExplained += iv.DeltaPct
+			continue
+		}
+		for s, sh := range iv.Share {
+			out.shares[s] += sh
+		}
+	}
+	return out
+}
+
 // windowLine sums every local call in range (all sessions, priced) against the
 // whole weekly rise. It is nil without weekly history or with an unpriced call.
 func windowLine(risePct float64, calls []Call, hasHistory bool, opts Options) *WindowLine {
@@ -479,22 +554,22 @@ func priceCall(catalog telemetry.PricingCatalog, c Call) *int64 {
 	return cost
 }
 
-// isClaudeWeekly selects the one series the report reads: Claude's all-models
-// weekly window, keyed by (agent, group, window) with an empty group. Other
-// series (agy groups, Claude session or Fable windows) never mix into it.
-func isClaudeWeekly(s usage.QuotaHistoryEntry) bool {
-	return s.Agent == usage.ClaudeAgentID && s.Group == "" && s.Window == usage.ClaudeWeeklyWindowName
+// isClaudeWindow selects one series the report reads: Claude's all-models window
+// named by sel, keyed by (agent, group, window) with an empty group. Other
+// series (agy groups, Claude other windows) never mix into it.
+func isClaudeWindow(s usage.QuotaHistoryEntry, sel windowSel) bool {
+	return s.Agent == usage.ClaudeAgentID && s.Group == "" && s.Window == sel.name
 }
 
-// weeklyGroups orders the weekly samples and groups them into windows: a
+// windowGroups orders the samples of one window and groups them into windows: a
 // sample joins the previous one's window when their reset_at agree within the
 // tolerance. An exact duplicate row is dropped. A row without reset_at is not
 // a window member: it is counted and skipped (M4 item 2).
-func weeklyGroups(samples []usage.QuotaHistoryEntry, tol time.Duration) ([][]usage.QuotaHistoryEntry, int) {
+func windowGroups(samples []usage.QuotaHistoryEntry, tol time.Duration, sel windowSel) ([][]usage.QuotaHistoryEntry, int) {
 	var weekly []usage.QuotaHistoryEntry
 	skipped := 0
 	for _, s := range samples {
-		if !isClaudeWeekly(s) {
+		if !isClaudeWindow(s, sel) {
 			continue
 		}
 		if s.ResetAt == nil {
@@ -554,11 +629,11 @@ type timeline struct {
 // stretch before a non-zero first sample, one stretch per rise, and the tail
 // after the last rise, which ends at the next window's start (the newest window's
 // tail is open). A reset is a new window, so no span crosses it.
-func buildTimeline(samples []usage.QuotaHistoryEntry, tol time.Duration) timeline {
-	groups, skipped := weeklyGroups(samples, tol)
+func buildTimeline(samples []usage.QuotaHistoryEntry, tol time.Duration, sel windowSel) timeline {
+	groups, skipped := windowGroups(samples, tol, sel)
 	tl := timeline{skipped: skipped}
 	for gi, g := range groups {
-		ws := windowStart(g)
+		ws := windowStart(g, sel)
 		// The first sample is the baseline: quota used before it is not measured,
 		// unless it is 0%, when the window started with nothing used.
 		cur := g[0].Timestamp
@@ -577,7 +652,7 @@ func buildTimeline(samples []usage.QuotaHistoryEntry, tol time.Duration) timelin
 			peak, cur = b, b.Timestamp
 		}
 		if gi+1 < len(groups) {
-			if next := windowStart(groups[gi+1]); next.After(cur) {
+			if next := windowStart(groups[gi+1], sel); next.After(cur) {
 				tl.spans = append(tl.spans, span{from: cur, to: next, kind: spanAfterOlder, rise: -1})
 			}
 		} else {
@@ -602,12 +677,12 @@ func (tl timeline) spanAt(t time.Time) (span, bool) {
 	return span{}, false
 }
 
-// windowStart is a window's first instant: its reset_at minus seven days, or
-// its first sample when reset_at is unknown. It is never after the first sample.
-func windowStart(g []usage.QuotaHistoryEntry) time.Time {
+// windowStart is a window's first instant: its reset_at minus the window length,
+// or its first sample when reset_at is unknown. It is never after the first sample.
+func windowStart(g []usage.QuotaHistoryEntry, sel windowSel) time.Time {
 	first := g[0]
 	if first.ResetAt != nil {
-		if s := first.ResetAt.Add(-weeklyWindowLength); s.Before(first.Timestamp) {
+		if s := first.ResetAt.Add(-sel.length); s.Before(first.Timestamp) {
 			return s
 		}
 	}
@@ -617,7 +692,7 @@ func windowStart(g []usage.QuotaHistoryEntry) time.Time {
 // WeeklyWindowStart returns the start of the newest weekly window: its reset_at
 // minus seven days. It reports false when there is no weekly history.
 func WeeklyWindowStart(samples []usage.QuotaHistoryEntry, tol time.Duration) (time.Time, bool) {
-	groups, _ := weeklyGroups(samples, tol)
+	groups, _ := windowGroups(samples, tol, weeklySel)
 	if len(groups) == 0 {
 		return time.Time{}, false
 	}
@@ -626,5 +701,5 @@ func WeeklyWindowStart(samples []usage.QuotaHistoryEntry, tol time.Duration) (ti
 	if reset == nil {
 		return time.Time{}, false
 	}
-	return reset.Add(-weeklyWindowLength), true
+	return reset.Add(-weeklySel.length), true
 }

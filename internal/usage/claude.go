@@ -114,6 +114,10 @@ const ClaudeAgentID = "claude"
 // all-models weekly window (quota-history rows copy the window name).
 const ClaudeWeeklyWindowName = "Weekly (7-day)"
 
+// ClaudeFiveHourWindowName is the quota-history window name of Claude's 5-hour
+// session window (ticket 1308 M1).
+const ClaudeFiveHourWindowName = "Session (5-hour)"
+
 // applyClaudeFable stores the Fable window of a payload in usage.ExtraWindows.
 func applyClaudeFable(usage *AgentUsage, w *QuotaWindow) {
 	if w == nil {
@@ -159,7 +163,7 @@ func fetchClaudeQuota(ctx context.Context, client *http.Client, oauth ClaudeCred
 	now := time.Now()
 	if oauthUsage.FiveHour != nil {
 		qw := QuotaWindow{
-			Name:             "Session (5-hour)",
+			Name:             ClaudeFiveHourWindowName,
 			UsedPercent:      oauthUsage.FiveHour.Utilization,
 			RemainingPercent: 100.0 - oauthUsage.FiveHour.Utilization,
 		}
@@ -241,7 +245,7 @@ func parseClaudeUsageOutput(out []byte) claudeQuotaPayload {
 		} else if qualifier != "" && !strings.Contains(qualifier, "all models") {
 			continue // another per-model weekly limit must not replace the all-models window
 		} else if strings.EqualFold(match[1], "session") {
-			window.Name = "Session (5-hour)"
+			window.Name = ClaudeFiveHourWindowName
 			payload.Session = window
 		} else {
 			window.Name = ClaudeWeeklyWindowName

@@ -25,21 +25,25 @@ func RenderText(w io.Writer, rep Report, unexplainedTolerancePct float64) error 
 		fmt.Fprintln(w, "no Claude calls in range")
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', tabwriter.AlignRight)
-	fmt.Fprintln(tw, "SESSION\tCALLS\tIN\tOUT\tCACHE-READ\tCACHE-WRITE\tAPI $\tATTRIB $\tUNATTRIB $\tQUOTA %\tPLAN NET $\tPLAN GROSS $\tFACTOR\t")
+	fmt.Fprintln(tw, "SESSION\tCALLS\tIN\tOUT\tCACHE-READ\tCACHE-WRITE\tAPI $\tATTRIB $\tUNATTRIB $\tQUOTA %\tQUOTA 5H %\tPLAN NET $\tPLAN GROSS $\tFACTOR\t")
 	for _, r := range rep.Sessions {
-		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
+		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
 			r.Session, r.Calls, r.Input, r.Output, r.CacheRead, r.CacheWrite,
 			money(r.APICostMicros), money(r.AttributedCostMicros), money(r.UnattributedCostMicros),
-			percent(r.QuotaPct), money(r.PlanNetMicros), money(r.PlanGrossMicros),
+			percent(r.QuotaPct), percent(r.FiveHourQuotaPct), money(r.PlanNetMicros), money(r.PlanGrossMicros),
 			sessionFactor(r, rep))
 	}
 	t := rep.Totals
-	fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
+	fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
 		t.Session, t.Calls, t.Input, t.Output, t.CacheRead, t.CacheWrite,
 		money(t.APICostMicros), money(t.AttributedCostMicros), money(t.UnattributedCostMicros),
-		percent(t.QuotaPct), money(t.PlanNetMicros), money(t.PlanGrossMicros), factor(t.Factor))
+		percent(t.QuotaPct), percent(t.FiveHourQuotaPct), money(t.PlanNetMicros), money(t.PlanGrossMicros), factor(t.Factor))
 	if err := tw.Flush(); err != nil {
 		return err
+	}
+	if rep.FiveHourIntervals > 0 {
+		fmt.Fprintf(w, "5-hour window: %d rise(s), %.2f pp in range, %.2f pp not explained locally; QUOTA 5H %% is the share of those rises (no factor yet, ticket 1308 M2)\n",
+			rep.FiveHourIntervals, rep.FiveHourRisePct, rep.FiveHourNotExplainedPct)
 	}
 	if rep.Window != nil {
 		fmt.Fprintf(w, "window (all local calls / weekly rise %.2f pp): API $%s, factor %s; an upper bound on local quota, other machines add to the rise\n",
