@@ -1,6 +1,6 @@
 # 1305 — One compaction threshold per model: harnez sets the provider's native window, plus --autocompact on harnez agent
 
-**Status**: Open
+**Status**: Closed — Delivered M0-M4. Claude children get CLAUDE_CODE_AUTO_COMPACT_WINDOW = resolved threshold (env beats settings; Claude 2.1.330 triggers ~33k below the window, 100k floor). --autocompact on agent start/resume (auto|<n>|<n>k), persisted, claude+codex only, agy/jules/pi fail before launch, shown in --dry-run. Live Haiku acceptance with owner settings: peak 65.7k, 0 requests over 100k. Unit test: --autocompact 120k gives child env 120000 and watchdog stop at 120000. neon:low final review: 1 HIGH + 3 MED + 1 LOW fixed in 134d7c05. make test-q1 green (83 packages).
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
