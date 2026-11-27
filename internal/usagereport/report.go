@@ -168,7 +168,7 @@ type Report struct {
 	Buckets Buckets `json:"buckets"`
 	// FiveHourRisePct is the 5-hour window's rise in range; FiveHourNotExplainedPct
 	// is the part no session's calls explain (no priced call, or no cost). The
-	// 5-hour share has no weekly-equivalent check yet (M2), so it is not quiet-tested.
+	// quiet check runs on the weekly-equivalent pp (5-hour pp / range ratio, M2).
 	FiveHourRisePct         float64 `json:"five_hour_rise_pct"`
 	FiveHourNotExplainedPct float64 `json:"five_hour_not_explained_pct"`
 	FiveHourIntervals       int     `json:"five_hour_intervals"`

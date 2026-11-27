@@ -49,6 +49,8 @@ type weeklyPath struct {
 	// start is each weekly group's first reading: its baseline, as on the weekly
 	// timeline, so a group's rise never includes the level it began at (M2b item 1).
 	start []float64
+	// end is each weekly group's last peak, the level it reached before any later group.
+	end []float64
 }
 
 func newWeeklyPath(samples []usage.QuotaHistoryEntry, tol time.Duration) weeklyPath {
@@ -63,8 +65,33 @@ func newWeeklyPath(samples []usage.QuotaHistoryEntry, tol time.Duration) weeklyP
 			p.group = append(p.group, gi)
 			p.peak = append(p.peak, peak)
 		}
+		p.end = append(p.end, peak)
 	}
 	return p
+}
+
+// riseBetween is the weekly rise over (a, b], summed over the weekly groups it
+// crosses. A group's rise starts at its baseline: the running peak at a within the
+// group a is in, or the group's first reading after a reset. A timeline that starts
+// after a takes its first group's first reading as the baseline (ticket 1308 M3).
+// ok is false when no weekly sample is at or before b.
+func (p weeklyPath) riseBetween(a, b time.Time) (rise float64, ok bool) {
+	v, gi, ok := p.valueAt(b)
+	if !ok {
+		return 0, false
+	}
+	base, pg, pok := p.valueAt(a)
+	if !pok {
+		base, pg = p.start[0], 0
+	}
+	if pg == gi {
+		return v - base, true
+	}
+	rise = p.end[pg] - base
+	for g := pg + 1; g < gi; g++ {
+		rise += p.end[g] - p.start[g]
+	}
+	return rise + v - p.start[gi], true
 }
 
 // valueAt returns the weekly peak at t (the last weekly sample at or before t) and
@@ -88,8 +115,9 @@ type fiveWindow struct {
 }
 
 // fiveHourWindows lists the 5-hour windows in time order. A window's weekly rise is
-// the weekly peak at its last sample minus the peak at the previous boundary; when
-// the weekly window changed in between, the rise is the new window's peak alone.
+// the weekly rise between the previous boundary and its last sample (riseBetween), so
+// a weekly reset inside a window counts both groups' rises and the windows sum to
+// the weekly rise of the range.
 func fiveHourWindows(samples []usage.QuotaHistoryEntry, rises []Interval, opts Options) []fiveWindow {
 	groups, _ := windowGroups(samples, opts.ResetTolerance, fiveHourSel)
 	path := newWeeklyPath(samples, opts.ResetTolerance)
@@ -108,17 +136,7 @@ func fiveHourWindows(samples []usage.QuotaHistoryEntry, rises []Interval, opts O
 		prevAt = wins[0].first
 	}
 	for k := range wins {
-		v, gi, ok := path.valueAt(wins[k].last)
-		pv, pg, pok := path.valueAt(prevAt)
-		if ok && pok {
-			wins[k].weeklyOK = true
-			// A weekly reset starts the new group at its first reading, so only the
-			// rise above that baseline is a rise (M2b item 1).
-			wins[k].weekly = v - path.start[gi]
-			if gi == pg {
-				wins[k].weekly = v - pv
-			}
-		}
+		wins[k].weekly, wins[k].weeklyOK = path.riseBetween(prevAt, wins[k].last)
 		prevAt = wins[k].last
 	}
 	return wins
