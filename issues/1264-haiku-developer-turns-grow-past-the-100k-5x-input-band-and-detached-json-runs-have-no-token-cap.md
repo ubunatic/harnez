@@ -118,3 +118,22 @@ Decision (host): non-JSON Claude prompts now get `withProtocol(...)` (dispatch p
 - **Docs gap (item 7, open):** only the 80k → 100k numbers changed. Still missing:
   - `docs/AutoCompaction.md:13-15`: the watchdog covers every Claude turn (streaming, `--json`, detached) since 1264, kills the process group at the crossing, meters the finished calls and stores the count so the next resume compacts first.
   - `docs/HarnezAgentArchitecture.md` §4.1: the same, plus the stopped `--json` document (status `stopped`, non-zero exit, message on stderr), `peak_context_tokens` (turn record, JSON, `[done:]`: the largest main-chain prompt; `context_tokens` is the last call and can hide the peak), and the `CONFIRM:` first line (`withProtocol`) now on Claude prompts.
+
+## M3 docs (3a6130ac) and acceptance canary (host, 2026-11-27)
+
+Docs: `docs/AutoCompaction.md:13-15` and `docs/HarnezAgentArchitecture.md` §4.1 items 5-7 now describe the watchdog on every Claude turn, the stopped `--json` document, `peak_context_tokens` and the `CONFIRM:` line.
+
+Same prompt as `canary-1264b` (installed binary at 284967aa), Haiku, harnez threshold 100k:
+
+| Run | Claude native window | Requests (k) | Over 100k | Result |
+|---|---|---|---|---|
+| 1264c stream | 100k (owner settings.json, changed 02:45) | 20.6, 81.2, 76.4, 22.9, 70.7, 22.4, 35.8, 43.5 | 0 | completed; 3 Claude autocompacts at 96-106k pre; `[done:]` peak context 81.2k, end 43.5k |
+| 1264c json | 100k | 20.4, 80.5, 75.3, 22.6, 84.8, 22.8, 36.0, 43.5 | 0 | completed; JSON `peak_context_tokens` 84801, `context_tokens` 43496 |
+| 1264d stream | 200k (env `CLAUDE_CODE_AUTO_COMPACT_WINDOW` on the process) | 20, 80, 134.9 | 1 | **stopped** at 134947; status `stopped`; turn metered |
+| 1264d json | 200k (env) | 20.4, 80.5, 134.8 | 1 | **stopped** at 134784; one JSON document, status `stopped`, exit 1; turn record 3 calls, cached 236047, cache write 123360, `cost_micros` 72149, peak 134784 |
+| 1264d stream resume | 200k (env) | | | `[compact: verified /compact at 134.9k]`, reply in 6s, context 23.3k: the resume after a kill with a dangling `tool_use` works, so SIGINT + `watchdog_grace_ms` is not needed |
+
+Findings:
+- The watchdog stops at the **first observed** crossing, so the request that crosses is already paid at the 5x rate (1 request over 100k instead of 3 in 1264b). It cannot prevent that request: a tool result can jump the prompt from 80k to 135k in one step.
+- Prevention comes from Claude's own window: with Haiku `autoCompactWindow` 100000 (owner's setting now) Claude compacts at 96-106k pre-tokens and no request passed 100k. Owner option, not in this ticket: harnez could set `CLAUDE_CODE_AUTO_COMPACT_WINDOW` from the harnez threshold on the Claude child.
+- LOW: a stopped turn's `output_tokens` (10 for 3 calls) comes from the stream's provisional assistant usage and under-counts output; input and cache counts match the requests.
