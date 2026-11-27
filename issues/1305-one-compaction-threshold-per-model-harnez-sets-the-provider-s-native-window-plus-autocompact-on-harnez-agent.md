@@ -127,6 +127,33 @@ the touched package, with the full run left to the host.
 - Read `docs/CLIDesign.md` first. Help text and the man page come from cobra; update the help string.
 - Unit test from Acceptance: `--autocompact 120k` puts 120000 in the Claude child env and the watchdog fires at 120k.
 
+## M2 delivered (45898eac pre-work, 3a56d0e1 flag)
+- Pre-work: disabled threshold is silent (`errCompactDisabled`), a malformed caller value warns, test env hermetic.
+- `--autocompact` on start and resume: `ParseAutocompact` (`auto`, `<n>`, `<n>k`; rejects 0, negatives, `1.5k`,
+  `12x`, `120K`, overflow), `Model.CompactTokens` and `Session.CompactTokens` (`compact_tokens`, persisted), so
+  `CompactThreshold` returns the override for the watchdog, the pre-turn compact, Codex `-c` and the Claude env.
+  The flag replaces a caller env value with one warning. claude and codex only; agy, jules, pi, lmcoder fail
+  before launch; `-i` rejects the flag. `auto` clears a stored value. Detached start forwards the flag.
+- Host check: installed binary rejects agy and `1.5k` before launch; `go test ./internal/subagent ./cmd/harnez` ok;
+  dev's single `make test-q1` green (83 packages).
+
+## M3 pre-work (do first)
+1. `--dry-run` does not show the effective window. Add one line, e.g. `compact window: 120000 (--autocompact)` or
+   `(threshold)`, naming how it reaches the provider (Claude env, Codex `-c`). Test it.
+2. Detached resume with `--autocompact`: add a test that the stored value reaches the worker (the start path has
+   one; resume does not).
+
+## M3 scope
+- Rewrite the trigger part of `docs/AutoCompaction.md` around the Strategy table: one harnez threshold per model;
+  primary vs backstop per provider; precedence (flag > caller env > threshold); the M0/M0b numbers (Claude 2.1.330
+  triggers about 33k below the window, 100k floor, env equals the settings key and wins). Remove claims this
+  contradicts (the 1264 "96-106k at 100k" reading; `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` stays as "no effect in -p").
+- Remove `legacy_growth_threshold_tokens` from `spec/agent.yaml`, its schema and its Go readers if nothing else uses
+  it; telemetry that needs a number uses the resolved threshold.
+- `docs/AutoCompaction.md` is a root doc: check whether it is a copy of a copyable source (CLAUDE.md "Rules and
+  Copyable-Doc Sources") and edit the source if so.
+- Leave the ticket open; the host runs the live acceptance canary and closes it.
+
 ## Acceptance
 - Live Haiku canary with the owner's settings at 200k: a harnez agent with threshold 100k shows 0 requests over 100k.
 - `--autocompact 120k` on a Claude agent: the child env carries 120000 and the watchdog fires at 120k (unit test);
