@@ -73,3 +73,19 @@ Developer plan (dev-1264, haiku:high): the watchdog is never armed for Claude be
 - **No auto-resume** after a stop; the caller (host) resumes.
 - **Fixture provenance:** the developer may capture one live `claude -p --output-format stream-json --verbose` run with a tiny prompt (stdout only, never `~/.claude`) and base the fixture on it.
 - **Peak field:** `peak_context_tokens` on the turn record and JSON output, shown in `[done:]` (M2).
+
+## M1 delivered: watchdog armed for non-JSON Claude turns (5876f571)
+
+Non-JSON Claude start and resume use the stream driver even without a tool limit; a stop stores the observed count as `ContextTokens`. New `cmd/harnez/agent_claude_watchdog_test.go` (6 cases, fixture shapes from one live `claude -p --output-format stream-json --verbose` capture, claude-code 2.1.330). q1: 83 ok, no `--- FAIL`. Host rerun of the package passed.
+
+Review (review-1264-m1, opus:med, 1m55s): stop count is per request and main chain only (`internal/subagent/claude.go:367`, `:387`); the next resume compacts first (`cmd/harnez/agent_run.go:1165-1185`); both stop tests fail without the fix.
+
+Decision (host): non-JSON Claude prompts now get `withProtocol(...)` (dispatch protocol, role rules, `CONFIRM:` first line) like the other streaming providers (`agent_run.go:785`, `:1284`). Accepted for consistency and the liveness signal; M3 documents it.
+
+## M2 pre-work / required refinements
+
+1. **MED: meter a stopped turn.** On a watchdog stop (start `agent_run.go:865-888` and resume), write the partial `TurnRecord`, the turn quota (`storeTurnQuota`/`recordTurnQuota`, as the tool-limit branch does) and the token totals. Today a 100k+ stopped turn is missing from cost and quota telemetry. Test it.
+2. **LOW: make the repeated-message-id case able to fail:** three lines of one message id at 40k each must not stop (catches a regression that sums per message) (`agent_claude_watchdog_test.go:118-125`).
+3. **LOW: resume after a stop compacts first:** a test that resumes a stopped session and asserts `/compact` ran before the prompt.
+4. **LOW: resume drops the family preamble** because `provider` is `""` (`agent_run.go:1284`). Fix or explain.
+5. Then the M2 scope: arm the watchdog for `--json` start and resume and the detached child (`agent_run.go:727`, `:1233`, `agent_async.go:304`) whenever the driver can stream; stop = one JSON document with status `stopped` on stdout, message on stderr, non-zero exit; `peak_context_tokens` on the turn record, JSON output and `[done:]`.
