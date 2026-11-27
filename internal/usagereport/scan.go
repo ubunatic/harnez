@@ -109,7 +109,6 @@ func walkProjectsDir(projectsDir, source string, since time.Time, claimed map[st
 		if claimed != nil && claimed[session] {
 			return nil
 		}
-		seenInDir[session] = true
 		if !since.IsZero() {
 			info, err := d.Info()
 			if err != nil {
@@ -119,6 +118,7 @@ func walkProjectsDir(projectsDir, source string, since time.Time, claimed map[st
 				return nil
 			}
 		}
+		seenInDir[session] = true
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err

@@ -3,6 +3,7 @@ package usagereport
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -106,5 +107,87 @@ func TestScanDirsMissingDirSkippedWithNote(t *testing.T) {
 	}
 	if len(warnings) != 1 || !strings.Contains(warnings[0], "~/absent-claude") {
 		t.Fatalf("warnings = %v, want note for ~/absent-claude", warnings)
+	}
+}
+
+func TestScanDirsStaleFileInFirstDirDoesNotClaimSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir1 := filepath.Join(home, ".claude")
+	dir2 := filepath.Join(home, "extra-claude")
+
+	since := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	stalePath := filepath.Join(dir1, "projects", "-p", "s1.jsonl")
+	freshPath := filepath.Join(dir2, "projects", "-p", "s1.jsonl")
+	writeFile(t, stalePath, line("m-old", "claude-haiku-5-5", "2026-11-13T09:00:00Z", 5))
+	writeFile(t, freshPath, line("m-new", "claude-haiku-5-5", "2026-11-13T13:00:00Z", 9))
+
+	staleTime := since.Add(-time.Hour)
+	if err := os.Chtimes(stalePath, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
+	freshTime := since.Add(time.Hour)
+	if err := os.Chtimes(freshPath, freshTime, freshTime); err != nil {
+		t.Fatal(err)
+	}
+
+	calls, warnings, err := ScanDirs([]string{dir1, dir2}, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	if len(calls) != 1 || calls[0].MessageID != "m-new" || calls[0].Source != "~/extra-claude" {
+		t.Fatalf("calls = %+v, want m-new from ~/extra-claude", calls)
+	}
+}
+
+func TestScanDirsSubagentOnlySessionInFirstDirClaimsSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir1 := filepath.Join(home, ".claude")
+	dir2 := filepath.Join(home, "extra-claude")
+
+	writeFile(t, filepath.Join(dir1, "projects", "-p", "s1", "subagents", "a.jsonl"),
+		line("m1", "claude-haiku-5-5", "2026-11-13T10:01:00Z", 5))
+	writeFile(t, filepath.Join(dir2, "projects", "-p", "s1.jsonl"),
+		line("m2", "claude-haiku-5-5", "2026-11-13T10:02:00Z", 99))
+
+	calls, _, err := ScanDirs([]string{dir1, dir2}, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || calls[0].MessageID != "m1" || calls[0].Source != "~/.claude" {
+		t.Fatalf("calls = %+v, want only m1 from ~/.claude", calls)
+	}
+}
+
+func TestRenderWarningsTextAndJSON(t *testing.T) {
+	rep := Build(nil, nil, Options{
+		Since:    time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC),
+		Until:    time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC),
+		Warnings: []string{"skipped ~/absent: no such file"},
+	})
+	var textBuf bytes.Buffer
+	if err := RenderText(&textBuf, rep, 1); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(textBuf.String(), "note: skipped ~/absent: no such file") {
+		t.Fatalf("RenderText missing warning note:\n%s", textBuf.String())
+	}
+
+	var jsonBuf bytes.Buffer
+	if err := RenderJSON(&jsonBuf, rep); err != nil {
+		t.Fatal(err)
+	}
+	var parsed struct {
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(jsonBuf.Bytes(), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	if len(parsed.Warnings) != 1 || parsed.Warnings[0] != "skipped ~/absent: no such file" {
+		t.Fatalf("RenderJSON warnings = %v, want [skipped ~/absent: no such file]", parsed.Warnings)
 	}
 }

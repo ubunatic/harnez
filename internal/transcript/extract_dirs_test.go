@@ -66,3 +66,51 @@ func TestResolveCommands_MultiDir(t *testing.T) {
 		t.Fatalf("ResolveCommands(sess-222) = %q, %v; want %q", got, err, s2)
 	}
 }
+
+func TestResolveCommands_EnvDirWinsOverConfigList(t *testing.T) {
+	home := t.TempDir()
+	xdg := t.TempDir()
+	envDir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	t.Setenv("CLAUDE_CONFIG_DIR", envDir)
+
+	cfgDir := filepath.Join(xdg, "harnez")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "local.yaml"),
+		[]byte("usage:\n  claude_config_dirs:\n    - ~/.claude\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	envFile := filepath.Join(envDir, "projects", "-p", "sess-111.jsonl")
+	cfgFile := filepath.Join(home, ".claude", "projects", "-p", "sess-111.jsonl")
+	writeFixture(t, envFile, "")
+	writeFixture(t, cfgFile, "")
+
+	got, err := ResolveCommands("sess-111", "claude")
+	if err != nil || got != envFile {
+		t.Fatalf("ResolveCommands(sess-111) = %q, %v; want %q", got, err, envFile)
+	}
+}
+
+func TestResolveCommands_MalformedLocalConfigReturnsError(t *testing.T) {
+	home := t.TempDir()
+	xdg := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+
+	cfgDir := filepath.Join(xdg, "harnez")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "local.yaml"), []byte("usage:\n  claude_config_dirs: [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ResolveCommands("sess-111", "claude"); err == nil {
+		t.Fatalf("expected error for malformed local.yaml")
+	}
+}
