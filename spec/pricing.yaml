@@ -60,3 +60,15 @@ claude-opus-5-5:
     cache_write_1h_micros_per_million: 8000000
     cached_input_micros_per_million: 200000
     output_micros_per_million: 20000000
+claude-opus-4-8:
+  model: "claude-opus-4-8"
+  revision: "harnez-2026-11-27"
+  provider: "claude"
+  source: "https://platform.claude.com/docs/en/about-claude/pricing"
+  fetched: "2026-11-27"
+  rates:
+    uncached_input_micros_per_million: 5000000
+    cache_write_5m_micros_per_million: 6250000
+    cache_write_1h_micros_per_million: 10000000
+    cached_input_micros_per_million: 500000
+    output_micros_per_million: 25000000
