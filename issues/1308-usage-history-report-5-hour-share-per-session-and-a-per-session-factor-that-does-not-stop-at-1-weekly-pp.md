@@ -1,6 +1,6 @@
 # 1308 — usage history report: 5-hour share per session and a per-session factor that does not stop at 1 weekly pp
 
-**Status**: In Progress — M2 delivered, ratio fix (M2b) next
+**Status**: In Progress — M2b delivered, review then M3
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -83,6 +83,11 @@ Plan accepted: parameterise the window selector (`isClaudeWeekly`, `windowStart`
 2. The partition-sum test from M1 pre-work 1, still missing: over in-range windows, Σ window weekly rises = `weekly_rise_pct` of the same report, including the reset-gap fixture from item 1.
 3. Expected live result after the fix: ratio about 12 (M0 12.5; raw 12.2), Σ weekly-eq near 41 pp, and the gap printed. The host checks this; the developer does not run the live report.
 4. One `make test-q1` only; no package runs before it.
+
+### M2b delivered: weekly baseline on a weekly reset (899e358c)
+- `weeklyPath.start` holds each weekly group's first reading; on a group change the window's weekly rise is the peak minus that baseline. Tests `weekly_gap_test.go`: the reset-gap fixture (failed before: 41 pp instead of 1) and the partition sum Σ window weekly rises = `rise_pct`. Dev: one `make test-q1`, 83 ok, 0 FAIL.
+- Host live check (`--window weekly`, 15:xx UTC): **ratio 12.19** from 8 windows (M0 12.5, raw 677 / 56 = 12.1). Σ weekly-eq 38.97 pp vs 42 pp weekly attributed: **gap −3.03 pp (−7 %)**. 58 of 123 sessions have a 5-hour factor (23 measured). Models: Haiku 19.4 weekly-eq pp, factor 25.0x (96 solo rises); Opus 19.5 pp, 76.0x (52 solo rises). Cost-weighted mix ≈ 50x, matching the weekly attributed factor (≈ 49x). 25bf9316 stays quiet.
+- Review: one agy:neon:low over 9b0dd647..899e358c is running; its findings land below as M3 pre-work.
 
 ### M1 — 5-hour share per session (Q2)
 - Run the same interval attribution on the Claude 5-hour window: resets every 5 hours are expected, not errors. Reuse the weekly code path; do not copy it.
